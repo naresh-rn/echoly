@@ -40,8 +40,7 @@ export default function Dashboard({ user, setUser }) {
   const [cooldown, setCooldown] = useState(0);
   const [currentProjectId, setCurrentProjectId] = useState(null);
 
-  const API_BASE = "http://localhost:5000/api";
-
+const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
   const fetchHistory = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;

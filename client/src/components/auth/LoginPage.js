@@ -3,6 +3,8 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { EyeOff, Eye } from 'lucide-react';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 export default function LoginPage({ setUser }) {
   // --- LOGIC SECTION ---
   const [email, setEmail] = useState('');
@@ -18,7 +20,7 @@ export default function LoginPage({ setUser }) {
     setError('');
     
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+      const res = await axios.post(`${API_BASE_URL}/api/auth/login`,  { email, password });
       localStorage.setItem('token', res.data.token);
       setUser(res.data.user);
       navigate('/dashboard');

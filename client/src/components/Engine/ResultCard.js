@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 
 // Ensure this matches your backend URL
-const API_BASE = "http://localhost:5000/api";
-
+const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
 export default function ResultCard({ platform, content, projectId, fetchHistory, onRegenerate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);

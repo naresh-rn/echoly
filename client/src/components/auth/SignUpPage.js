@@ -3,6 +3,8 @@ import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { EyeOff, Eye } from 'lucide-react';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 export default function SignupPage({ setUser }) {
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -26,7 +28,7 @@ export default function SignupPage({ setUser }) {
     // Inside SignupPage.js handleSignup
 // Inside handleSignup function
 try {
-  const res = await axios.post('http://localhost:5000/api/auth/register', formData);
+  const res = await axios.post(`${API_BASE_URL}/api/auth/register`, formData);
   
   // 1. Save Token
   localStorage.setItem('token', res.data.token);
