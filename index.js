@@ -69,23 +69,27 @@ cloudinary.config({
 const Project = mongoose.model('Project', ProjectSchema);
 
 // --- MIDDLEWARE ---
-const app = express();
 
-// 1. Precise CORS Configuration
-const corsOptions = {
-  origin: ["http://localhost:3000", "https://echoly-tau.vercel.app"],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "x-auth-token", "Authorization"],
+const allowedOrigins = [
+  'https://echoly-tau.vercel.app', // Your Vercel URL
+  'http://localhost:3000',          // Local development
+  'http://localhost:5173'           // Vite local development
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
-};
-
-// 2. Use CORS middleware
-app.use(cors(corsOptions));
-
-// 3. Handle Preflight (OPTIONS) requests explicitly for all routes
-// This is what fixes the "No Access-Control-Allow-Origin" error
-app.options('*', cors(corsOptions));
-
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 // 4. Body Parsers (Cleaned up: only use the 50mb one)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
