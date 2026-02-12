@@ -2,6 +2,8 @@ import React from 'react';
 import { Calendar, Layers, ArrowRight, Trash2, FileText, Youtube, Globe, HardDrive } from 'lucide-react';
 import axios from 'axios';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 export default function VaultArchive({ projects, onRestore, fetchHistory }) {
   
   // Inside your Vault/Archive component

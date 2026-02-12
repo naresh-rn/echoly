@@ -8,6 +8,7 @@ import LoginPage from './components/auth/LoginPage';
 import SignUpPage from './components/auth/SignUpPage';
 import Dashboard from './components/Dashboard';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -21,7 +22,7 @@ export default function App() {
       }
       try {
         // Verify token with backend
-        const res = await axios.get('http://localhost:5000/api/auth/me', {
+        const res = await axios.get(`${API_BASE_URL}/api/auth/me`, {
           headers: { 'x-auth-token': token }
         });
         setUser(res.data);
