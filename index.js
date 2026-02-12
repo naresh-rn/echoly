@@ -68,17 +68,27 @@ cloudinary.config({
 // Fixed: Define the model as a constant so it's accessible in the routes below
 const Project = mongoose.model('Project', ProjectSchema);
 
+// --- MIDDLEWARE ---
 const app = express();
-app.use(cors({
-  origin: ["http://localhost:3000", "https://echoly-tau.vercel.app" ], // Allow React and Vite
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "x-auth-token"], // Matches your App.js header
-  credentials: true
-}));
-app.use(express.json());
+
+// 1. Precise CORS Configuration
+const corsOptions = {
+  origin: ["http://localhost:3000", "https://echoly-tau.vercel.app"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "x-auth-token", "Authorization"],
+  credentials: true,
+};
+
+// 2. Use CORS middleware
+app.use(cors(corsOptions));
+
+// 3. Handle Preflight (OPTIONS) requests explicitly for all routes
+// This is what fixes the "No Access-Control-Allow-Origin" error
+app.options('*', cors(corsOptions));
+
+// 4. Body Parsers (Cleaned up: only use the 50mb one)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Remove: const upload = multer({ dest: 'uploads/' });
 // Replace with:
