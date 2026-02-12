@@ -70,9 +70,10 @@ const Project = mongoose.model('Project', ProjectSchema);
 
 const app = express();
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173"], // Allow React and Vite
+  origin: ["http://localhost:3000", "https://echoly-tau.vercel.app" ], // Allow React and Vite
   methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "x-auth-token"] // Matches your App.js header
+  allowedHeaders: ["Content-Type", "x-auth-token"], // Matches your App.js header
+  credentials: true
 }));
 app.use(express.json());
 app.use(express.json({ limit: '50mb' }));
