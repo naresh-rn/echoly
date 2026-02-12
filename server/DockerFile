@@ -1,0 +1,25 @@
+# Use Node.js as the base image
+FROM node:18
+
+# Install ffmpeg and python3 (required for yt-dlp)
+RUN apt-get update && apt-get install -y ffmpeg python3 python3-pip
+
+# Install yt-dlp globally
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+RUN chmod a+rx /usr/local/bin/yt-dlp
+
+# Set the working directory
+WORKDIR /usr/src/app
+
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy the rest of the server code
+COPY . .
+
+# Expose the port (Render uses 10000 by default for Docker, or your PORT env)
+EXPOSE 5000
+
+# Start the server
+CMD ["node", "index.js"]
