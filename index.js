@@ -16,6 +16,39 @@ require('dotenv').config();
 
 // --- MODELS ---
 const User = require('./models/User');
+const app = express();
+// --- 1. BULLETPROOF CORS SETUP ---
+app.use((req, res, next) => {
+    // List your allowed origins clearly
+    const allowedOrigins = [
+        "http://localhost:3000",
+        "https://echoly-tau.vercel.app"
+    ];
+    
+    const origin = req.headers.origin;
+    
+    // Check if the request's origin is in our allowed list
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-auth-token, Authorization');
+
+    // Handle Preflight (OPTIONS) immediately with a 204 (No Content)
+    // This stops the request from hitting any logic that might crash
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    
+    next();
+});
+
+// --- 2. BODY PARSERS (Must be below CORS) ---
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 // --- DIRECTORY SETUP & CLEANUP ---
 const tempDir = 'temp_uploads';
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
@@ -67,32 +100,6 @@ cloudinary.config({
 });
 // Fixed: Define the model as a constant so it's accessible in the routes below
 const Project = mongoose.model('Project', ProjectSchema);
-
-// --- MIDDLEWARE ---
-
-const allowedOrigins = [
-  'https://echoly-tau.vercel.app', // Your Vercel URL
-  'http://localhost:3000',          // Local development
-  'http://localhost:5173'           // Vite local development
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-// 4. Body Parsers (Cleaned up: only use the 50mb one)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Remove: const upload = multer({ dest: 'uploads/' });
 // Replace with:
