@@ -16,6 +16,39 @@ require('dotenv').config();
 
 // --- MODELS ---
 const User = require('./models/User');
+const app = express();
+// --- 1. BULLETPROOF CORS SETUP ---
+app.use((req, res, next) => {
+    // List your allowed origins clearly
+    const allowedOrigins = [
+        "http://localhost:3000",
+        "https://echoly-tau.vercel.app"
+    ];
+    
+    const origin = req.headers.origin;
+    
+    // Check if the request's origin is in our allowed list
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-auth-token, Authorization');
+
+    // Handle Preflight (OPTIONS) immediately with a 204 (No Content)
+    // This stops the request from hitting any logic that might crash
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    
+    next();
+});
+
+// --- 2. BODY PARSERS (Must be below CORS) ---
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 // --- DIRECTORY SETUP & CLEANUP ---
 const tempDir = 'temp_uploads';
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
@@ -67,17 +100,6 @@ cloudinary.config({
 });
 // Fixed: Define the model as a constant so it's accessible in the routes below
 const Project = mongoose.model('Project', ProjectSchema);
-
-const app = express();
-app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173"], // Allow React and Vite
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "x-auth-token"] // Matches your App.js header
-}));
-app.use(express.json());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Remove: const upload = multer({ dest: 'uploads/' });
 // Replace with:
