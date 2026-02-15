@@ -6,7 +6,7 @@ import {
   Download, 
   Layers, 
   Zap, 
-  FileJson, 
+  // FileJson, 
   FileText,
   Copy
 } from 'lucide-react';

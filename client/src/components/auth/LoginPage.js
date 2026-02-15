@@ -53,18 +53,14 @@ export default function LoginPage({ setUser }) {
           <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/90 z-0" />
 
           <div className="relative z-10">
-              <span className="text-6xl font-heading font-bold text-white tracking-tighter">Echoly</span>
+              <span className="text-8xl font-heading font-bold text-white tracking-tighter">Echoly</span>
           </div>
 
-          <div className="relative z-10">
-            <h1 className="text-white text-5xl font-heading leading-tight mb-8 tracking-wide drop-shadow-lg italic">
+          <div className="relative z-10 absolute self-end text-right">
+            <h1 className="text-white text-3xl font-heading leading-tight tracking-wide drop-shadow-lg italic">
               Automate Your Reach,<br />
               Expand Your Legacy.
             </h1>
-            <div className="flex gap-2 opacity-50">
-              <div className="h-1.5 w-16 bg-white rounded-full"></div>
-              <div className="h-1.5 w-6 bg-zinc-600 rounded-full"></div>
-            </div>
           </div>
         </div>
 
@@ -139,6 +135,14 @@ export default function LoginPage({ setUser }) {
               >
                 {isLoading ? "Authenticating..." : "Initialize Session"}
               </button>
+              <div className='flex  items-center gap-2'>
+              <button onClick={() => navigate('/register')} className='flex items-center pt-1'>SignUp</button>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+
+              
+              </div>
             </form>
           </div>
         </div>

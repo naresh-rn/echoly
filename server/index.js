@@ -79,8 +79,6 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-// Remove: const upload = multer({ dest: 'uploads/' });
-// Replace with:
 const upload = multer({ dest: tempDir + '/' });
 const JWT_SECRET = process.env.JWT_SECRET || 'COMMAND_GRID_SECRET_2026';
 
@@ -104,9 +102,6 @@ const auth = (req, res, next) => {
 };
 
 // --- AUTH ROUTES ---
-// --- AUTH ROUTES ---
-// --- AUTH ROUTES ---
-
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
     const { name, email, password } = req.body;
@@ -125,11 +120,11 @@ app.post('/api/auth/register', async (req, res) => {
             user: { id: user._id, email: user.email, name: user.name } 
         });
     } catch (err) {
-        console.error("DEBUGGING ERROR:", err); // Look at your terminal for this!
-    res.status(500).json({ 
-        msg: 'Server Error', 
-        actualError: err.message // This sends the secret error to your browser console
-    });
+        console.error("DEBUGGING ERROR:", err); 
+        res.status(500).json({ 
+            msg: 'Server Error', 
+            actualError: err.message // This sends the secret error to your browser console
+        });
     }
 });
 
@@ -161,18 +156,18 @@ app.get('/api/auth/me', auth, async (req, res) => {
 });
 // --- PLATFORM CONFIG ---
 const PLATFORMS_CONFIG = [
-  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook." },
-  { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts." },
-  { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script." },
-  { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script." },
-  { id: 'newsletter', prompt: "Newsletter Editor. Subject line + executive summary." },
-  { id: 'blog', prompt: "SEO tech blogger. 400-word draft." },
-  { id: 'threads', prompt: "Conversational Threads influencer." },
-  { id: 'facebook', prompt: "Community Manager. Story-driven post." },
-  { id: 'pinterest', prompt: "Pinterest SEO. Title and Description." },
-  { id: 'youtube', prompt: "YouTube Manager. Community tab update." },
-  { id: 'medium', prompt: "Thought Leadership Writer. Narrative summary." },
-  { id: 'reddit', prompt: "Expert Redditor. Subreddit-ready formatting." }
+  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook. Do not use markdown, bolding, or ** stars." },
+  { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts. Do not use markdown, bolding, or ** stars." },
+  { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script. Do not use markdown, bolding, or ** stars." },
+  { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script. Do not use markdown, bolding, or ** stars." },
+  { id: 'newsletter', prompt: "Newsletter Editor. Subject line + executive summary. Do not use markdown, bolding, or ** stars." },
+  { id: 'blog', prompt: "SEO tech blogger. 400-word draft. Do not use markdown, bolding, or ** stars." },
+  { id: 'threads', prompt: "Conversational Threads influencer. Do not use markdown, bolding, or ** stars." },
+  { id: 'facebook', prompt: "Community Manager. Story-driven post. Do not use markdown, bolding, or ** stars." },
+  { id: 'pinterest', prompt: "Pinterest SEO. Title and Description. Do not use markdown, bolding, or ** stars." },
+  { id: 'youtube', prompt: "YouTube Manager. Community tab update. Do not use markdown, bolding, or ** stars." },
+  { id: 'medium', prompt: "Thought Leadership Writer. Narrative summary. Do not use markdown, bolding, or ** stars." },
+  { id: 'reddit', prompt: "Expert Redditor. Subreddit-ready formatting. Do not use markdown, bolding, or ** stars." }
 ];
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -213,8 +208,6 @@ async function generatePlatformText(platformId, text, tone) {
 }
 
 // --- PROJECT ENGINE ROUTES ---
-// ... (Your imports remain the same)
-
 // Unified Repurpose Route
 app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => {
     // 1. SETUP SSE (Server-Sent Events) HEADERS

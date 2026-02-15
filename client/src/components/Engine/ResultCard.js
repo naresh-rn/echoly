@@ -1,258 +1,255 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  Copy, 
-  CheckCircle, 
-  Share2, 
-  Edit3, 
-  X,
-  Zap, 
-  Maximize2, 
-  Trash2, 
-  RefreshCw 
+import {
+  Copy, Check, Edit3, X, Maximize2, Trash2,
+  RefreshCw, Image as ImageIcon, MoreVertical, Wand2,
 } from 'lucide-react';
 
-// Ensure this matches your backend URL
-const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
-export default function ResultCard({ platform, content, projectId, fetchHistory, onRegenerate }) {
+const API_BASE =
+  (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
+
+export default function ResultCard({
+  platform,
+  content,
+  projectId,
+  fetchHistory,
+  onRegenerate
+}) {
+
+  // ---------------- STATE ----------------
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
   const [copied, setCopied] = useState(false);
   const [realImage, setRealImage] = useState(null);
-  const [isVisualizing, setIsVisualizing] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Sync edited content if the parent content changes (e.g., on regeneration)
-  useEffect(() => {
-    setEditedContent(content);
-  }, [content]);
+  useEffect(() => setEditedContent(content), [content]);
 
-  // --- DELETE LOGIC (Targets a single asset in the project array) ---
-  const handleDelete = async () => {
-    if (!projectId) {
-      alert("No Project ID found. Try repurposing again first.");
-      return;
-    }
+  // ---------------- PLATFORM STYLE ----------------
+  const getPlatformIdentity = (p) => {
+    const str = p.toLowerCase();
 
-    if (!window.confirm(`Permanently remove this ${platform} draft?`)) return;
+    if (str.includes("linkedin"))
+      return { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-100", label: "LinkedIn" };
 
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${API_BASE}/projects/${projectId}/asset/${platform}`, {
-        headers: { 'x-auth-token': token }
-      });
-      
-      // Refresh the dashboard and vault history
-      if (fetchHistory) fetchHistory();
-      
-      alert(`Success: ${platform} removed.`);
-    } catch (e) {
-      console.error("Delete Error:", e);
-      alert(e.response?.data?.error || "Could not remove this specific post.");
-    }
+    if (str.includes("twitter") || str.includes("x"))
+      return { color: "text-zinc-900", bg: "bg-zinc-50", border: "border-zinc-200", label: "Twitter / X" };
+
+    if (str.includes("instagram"))
+      return { color: "text-pink-600", bg: "bg-pink-50", border: "border-pink-100", label: "Instagram" };
+
+    if (str.includes("facebook"))
+      return { color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200", label: "Facebook" };
+
+    return { color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-100", label: p };
   };
 
+  const ui = getPlatformIdentity(platform);
+
+  // ---------------- ACTIONS ----------------
   const handleCopy = () => {
     navigator.clipboard.writeText(editedContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `EchoThread | ${platform}`,
-          text: editedContent,
-        });
-      } catch (err) { console.log("Share cancelled"); }
-    } else {
-      alert("Web Share not supported on this browser.");
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete this ${platform} draft permanently?`)) return;
+
+    setIsDeleting(true);
+    try {
+      const token = localStorage.getItem("token");
+
+      await axios.delete(
+        `${API_BASE}/projects/${projectId}/asset/${platform}`,
+        { headers: { "x-auth-token": token } }
+      );
+
+      fetchHistory && fetchHistory();
+    } catch {
+      alert("Delete failed.");
+      setIsDeleting(false);
     }
   };
-const generateRealImage = async () => {
-  setIsVisualizing(true);
-  setRealImage(null);
-  setImageLoading(true); // Start loading immediately
-  
-  try {
-    const token = localStorage.getItem('token');
-    const res = await axios.post(`${API_BASE}/generate-image-prompt`, 
-      { platform, content }, 
-      { headers: { 'x-auth-token': token } }
-    );
-    
-    // 1. Simplify the prompt slightly for the free API
-    const aiPrompt = res.data.prompt;
-    const encodedPrompt = encodeURIComponent(aiPrompt.substring(0, 400)); // Keep it under 400 chars
-    
-    // 2. Add 'model=flux' - it's often faster and higher quality on Pollinations
-    const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1024&height=1024&seed=${Math.floor(Math.random() * 100000)}&model=flux&nologo=true`;    
-    
-    setRealImage(imageUrl);
-    
-    // 3. SAFETY NET: If it takes more than 40 seconds, tell the user to retry
-    setTimeout(() => {
-      if (imageLoading) {
-        setImageLoading(false);
-        setRealImage(null);
-        alert("The art engine is busy. Please try clicking 'Magic Image' again!");
-      }
-    }, 40000);
 
-  } catch (e) {
-    setImageLoading(false);
-    setIsVisualizing(false);
-    alert("Image generation failed.");
-  } finally {
-    setIsVisualizing(false);
-  }
-};
+  const generateImage = async () => {
+    setImageLoading(true);
+    try {
+      const token = localStorage.getItem("token");
 
-  const toggleExpand = () => setIsExpanded(!isExpanded);
+      const res = await axios.post(
+        `${API_BASE}/generate-image-prompt`,
+        { platform, content },
+        { headers: { "x-auth-token": token } }
+      );
 
+      const encodedPrompt = encodeURIComponent(
+        res.data.prompt.substring(0, 400)
+      );
+
+      const imageUrl =
+        `https://pollinations.ai/p/${encodedPrompt}?width=1024&height=1024&seed=${Math.floor(Math.random()*100000)}&model=flux&nologo=true`;
+
+      setRealImage(imageUrl);
+    } catch {
+      alert("Visualization failed.");
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
+  if (isDeleting) return null;
+
+  // ---------------- UI ----------------
   return (
-    <>
-      {/* 1. STANDARD GRID CARD */}
-      <div className="relative bg-white border border-slate-100 rounded-[32px] p-8 transition-all duration-500 flex flex-col h-[500px] hover:border-black hover:-translate-y-2 hover:shadow-2xl group">
-        
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
-            <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-slate-800">{platform}</h3>
-          </div>
-          
-          <div className="flex gap-1 bg-slate-50 p-1 rounded-2xl border border-slate-100">
-            <button onClick={toggleExpand} className="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-white transition-all" title="Expand View"><Maximize2 size={14} /></button>
-            <button onClick={() => setIsEditing(!isEditing)} className="p-2 rounded-xl text-slate-400 hover:text-orange-600 hover:bg-white transition-all" title="Edit Content">
-                {isEditing ? <X size={14} /> : <Edit3 size={14} />}
-            </button>
-            {onRegenerate && (
-              <button onClick={onRegenerate} className="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-white transition-all" title="Regenerate Platform"><RefreshCw size={14} /></button>
-            )}
-            <button onClick={handleShare} className="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-white transition-all" title="Share Content"><Share2 size={14} /></button>
-            <button onClick={handleCopy} className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-white transition-all" title="Copy Content">
-                {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
-            </button>
-            <button 
-                onClick={handleDelete}
-                className="p-2 text-slate-400 hover:text-red-500 transition-all rounded-xl hover:bg-white"
-                title="Delete Asset"
+<div className="break-inside-avoid group relative bg-white rounded-[2.5rem] border border-gray-200 shadow-sm hover:shadow-2xl hover:shadow-gray-200/40 transition-all duration-500 flex flex-col overflow-hidden mb-6">
+
+      {/* HEADER */}
+      <div className="flex justify-between items-center px-7 py-6">
+
+        <div className={`flex items-center gap-3 px-4 py-2 rounded-2xl border ${ui.bg} ${ui.border}`}>
+          <div className={`w-2 h-2 rounded-full animate-pulse ${ui.color.replace('text','bg')}`} />
+          <span className={`text-[11px] font-bold uppercase tracking-[0.15em] ${ui.color}`}>
+            {ui.label}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+
+          <button
+            onClick={() => setIsExpanded(true)}
+            className="p-2.5 text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl"
+          >
+            <Maximize2 size={18} />
+          </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-2.5 text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl"
             >
-                <Trash2 size={14} />
+              <MoreVertical size={20} />
             </button>
-          </div>
-        </div>
 
-        <div className="flex-grow overflow-hidden flex flex-col bg-slate-50/50 rounded-2xl p-5 border border-slate-100">
-          <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar">
-            {isEditing ? (
-              <textarea 
-                className="w-full h-full bg-transparent text-[13px] leading-[1.8] font-medium text-slate-800 outline-none resize-none"
-                value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
-                autoFocus
-              />
-            ) : (
-              <p className="text-slate-600 text-[13px] leading-[1.8] font-medium whitespace-pre-wrap">{editedContent}</p>
-            )}
-          </div>
-        </div>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
 
-        <div className="mt-6 pt-4 border-t border-slate-50 flex flex-col gap-4">
-          
-          {/* THE REAL IMAGE DISPLAY */}
-          {realImage && (
-            <div className="relative group/img rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 min-h-[300px] flex items-center justify-center animate-in zoom-in-95 duration-500">
-              
-              {/* Loading Overlay - visible until image is ready */}
-              {imageLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50 z-10">
-                  <RefreshCw className="animate-spin text-blue-500 mb-2" size={24} />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Rendering Pixels...</span>
-                </div>
-              )}
+                <div className="absolute right-0 mt-3 w-56 bg-white border rounded-[1.5rem] shadow-2xl z-20 py-3">
 
-              <img 
-                src={realImage} 
-                alt="AI Generated Visual" 
-                className={`w-full h-full object-cover transition-opacity duration-700 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
-                onLoad={() => setImageLoading(false)}
-                onError={() => {
-                  setImageLoading(false);
-                  setRealImage(null);
-                  alert("Image failed to render. Let's try one more time!");
-                }}
-              />
-              
-              {!imageLoading && (
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <button 
-                    onClick={() => window.open(realImage, '_blank')}
-                    className="bg-white text-slate-900 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
+                  <button
+                    onClick={() => { setIsEditing(true); setShowMenu(false); }}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-sm hover:bg-gray-50"
                   >
-                    View Full Artwork
+                    <Edit3 size={16}/> Edit Draft
                   </button>
+
+                  <button
+                    onClick={() => { onRegenerate(platform, content); setShowMenu(false); }}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-sm hover:bg-gray-50"
+                  >
+                    <RefreshCw size={16}/> AI Regenerate
+                  </button>
+
+                  <button
+                    onClick={handleDelete}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-sm text-red-500 hover:bg-red-50"
+                  >
+                    <Trash2 size={16}/> Delete Forever
+                  </button>
+
                 </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex justify-between items-center">
-            <div className="flex gap-2">
-              <button onClick={handleCopy} className="bg-slate-900 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center gap-2">
-                {copied ? <CheckCircle size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy Text'}
-              </button>
-
-              {/* THE MAGIC IMAGE BUTTON */}
-              {!realImage && (
-                <button 
-                  onClick={generateRealImage}
-                  disabled={isVisualizing}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2"
-                >
-                  <Zap size={14} className={isVisualizing ? "animate-spin" : ""} />
-                  {isVisualizing ? 'Generating Image...' : 'Magic Image'}
-                </button>
-              )}
-            </div>
-            
-            <span className="text-[10px] font-bold text-slate-300 uppercase">Echoly v1.0</span>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 2. EXPANDED VIEW (Modal) */}
-      {isExpanded && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300" onClick={toggleExpand} />
-          <div className="relative w-full max-w-2xl bg-white rounded-[40px] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-300 border border-slate-200">
-            <div className="px-10 py-8 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Focused View</span>
-                <h2 className="text-2xl font-black uppercase italic text-slate-900">{platform} Artifact</h2>
+      {/* CONTENT (NO FLEX-GROW ANYMORE) */}
+      <div className="px-9 pb-8">
+
+        {isEditing ? (
+          <textarea
+            className="w-full min-h-[220px] bg-gray-50 rounded-3xl p-6 text-[15px] resize-none"
+            value={editedContent}
+            onChange={(e)=>setEditedContent(e.target.value)}
+          />
+        ) : (
+          <p className="text-[17px] leading-[1.7] text-gray-700 whitespace-pre-wrap">
+            {editedContent}
+          </p>
+        )}
+        {(realImage || imageLoading) && (
+          <div className="mt-8 rounded-[2rem] overflow-hidden border bg-gray-50 aspect-video">
+
+            {imageLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Wand2 className="animate-spin text-indigo-500" size={32}/>
               </div>
-              <button onClick={toggleExpand} className="p-3 bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-full transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex-grow p-10 overflow-y-auto bg-slate-50/30">
-              <p className="text-lg text-slate-700 leading-relaxed whitespace-pre-wrap font-medium">
-                {editedContent}
-              </p>
-            </div>
-            <div className="p-8 bg-white border-t border-slate-100 grid grid-cols-2 gap-4">
-              <button onClick={handleCopy} className="bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
-                {copied ? <CheckCircle size={18} /> : <Copy size={18} />} {copied ? 'Copied' : 'Copy'}
-              </button>
-              <button onClick={handleShare} className="bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-3">
-                <Share2 size={18} /> Share
-              </button>
-            </div>
+            ) : (
+              <img src={realImage} className="w-full h-full object-cover" alt="AI visual"/>
+            )}
+
+          </div>
+        )}
+      </div>
+
+      {/* FOOTER */}
+      <div className="px-8 py-5 bg-gray-50/40 border-t flex justify-between items-center">
+
+        <button
+          onClick={handleCopy}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[11px] font-bold ${
+            copied ? "bg-green-500 text-white" : "bg-white border"
+          }`}
+        >
+          {copied ? <Check size={14}/> : <Copy size={14}/>}
+          {copied ? "COPIED" : "COPY TEXT"}
+        </button>
+
+        {!realImage && (
+          <button
+            onClick={generateImage}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-black text-white text-[11px] font-bold"
+          >
+            <ImageIcon size={14}/>
+            VISUALIZE
+          </button>
+        )}
+
+        <span className="text-[10px] font-black text-gray-300">
+          {editedContent.length} CHARS
+        </span>
+
+      </div>
+
+      {/* EXPANDED MODAL */}
+      {isExpanded && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-white/90 backdrop-blur-xl">
+
+          <div className="bg-white rounded-[3rem] max-w-5xl w-full p-12 overflow-y-auto max-h-[90vh]">
+
+            <button
+              onClick={()=>setIsExpanded(false)}
+              className="absolute top-6 right-6"
+            >
+              <X size={28}/>
+            </button>
+
+            <p className="text-3xl leading-[1.5] text-gray-800 whitespace-pre-wrap">
+              {editedContent}
+            </p>
+
+            {realImage && (
+              <img src={realImage} className="mt-10 rounded-3xl"/>
+            )}
+
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
