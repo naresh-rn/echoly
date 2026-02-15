@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import axios from 'axios';
 import { 
@@ -38,23 +38,23 @@ export default function Dashboard({ user, setUser }) {
   const [progress, setProgress] = useState(0); 
   const [history, setHistory] = useState([]);
   const [cooldown, setCooldown] = useState(0);
+  const [generatedImage, setGeneratedImage] = useState(null);
   const [currentProjectId, setCurrentProjectId] = useState(null);
 
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
   
-  // Data Fetching
-  const fetchHistory = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-      const res = await axios.get(`${API_BASE}/history`, {
-        headers: { 'x-auth-token': token }
-      });
-      setHistory(res.data);
-    } catch (e) {
-      console.error("Vault Sync Error:", e.message);
-    }
-  };
+const fetchHistory = useCallback(async () => {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+  try {
+    const res = await axios.get(`${API_BASE}/history`, {
+      headers: { 'x-auth-token': token }
+    });
+    setHistory(res.data);
+  } catch (e) {
+    console.error("Vault Sync Error:", e.message);
+  }
+}, [API_BASE]); // Added API_BASE as a dependency
 
   useEffect(() => {
     fetchHistory();
@@ -62,7 +62,7 @@ export default function Dashboard({ user, setUser }) {
       const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
       return () => clearTimeout(timer);
     }
-  }, [cooldown]);
+  }, [cooldown, fetchHistory]);
 
   // Actions
   const handleRepurpose = async (type, content, tone) => {
@@ -93,22 +93,35 @@ export default function Dashboard({ user, setUser }) {
 
             const lines = decoder.decode(value).split('\n\n');
             lines.forEach(line => {
-                if (line.startsWith('data: ')) {
-                    const data = JSON.parse(line.replace('data: ', ''));
-                    if (data.progress) setProgress(data.progress);
-                    if (data.status) setStatusText(data.status);
-                    if (data.partialResult) {
-                        setBundle(prev => ({
-                            ...prev,
-                            [data.partialResult.platform]: data.partialResult.content
-                        }));
-                    }
-                    if (data.projectId) {
-                        setCurrentProjectId(data.projectId);
-                        fetchHistory();
-                    }
-                }
-            });
+          // Only process lines that actually start with "data: "
+          if (line.trim().startsWith('data: ')) {
+              try {
+                  const jsonString = line.replace('data: ', '').trim();
+                  
+                  // Skip if the string is empty
+                  if (!jsonString) return;
+
+                  const data = JSON.parse(jsonString);
+                  
+                  // Process your data as usual
+                  if (data.progress) setProgress(data.progress);
+                  if (data.status) setStatusText(data.status);
+                  if (data.partialResult) {
+                      setBundle(prev => ({
+                          ...prev,
+                          [data.partialResult.platform]: data.partialResult.content
+                      }));
+                  }
+                  if (data.projectId) {
+                      setCurrentProjectId(data.projectId);
+                      fetchHistory();
+                  }
+              } catch (e) {
+                  // Silently fail for incomplete chunks; the next full chunk will fix it
+                  console.warn("Received partial JSON chunk, waiting for full data...");
+              }
+          }
+      });
         }
       } catch (e) {
           setStatusText("Mission Failed");
@@ -175,6 +188,28 @@ export default function Dashboard({ user, setUser }) {
     URL.revokeObjectURL(url);
   };
 
+  const handleGenerateImage = async (platformContent) => {
+  try {
+    // 1. Get the prompt from your backend
+    const promptRes = await axios.post(`${API_BASE}/generate-image-prompt`, 
+      { content: platformContent },
+      { headers: { 'x-auth-token': localStorage.getItem('token') } }
+    );
+
+    const prompt = promptRes.data.prompt;
+
+    // 2. Generate the actual image URL
+    // Using Pollinations (Free/No Key) as an example:
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
+
+    // 3. Update state
+    setGeneratedImage(imageUrl);
+  } catch (error) {
+    console.error("Image Gen Error:", error);
+    alert("Could not generate image. Check console for details.");
+  }
+};
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -188,10 +223,12 @@ export default function Dashboard({ user, setUser }) {
       <Link 
         to={to} 
         onClick={() => setIsMobileMenuOpen(false)}
-        className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 font-body text-sm font-medium mb-1 ${isActive ? 'bg-black text-white shadow-lg shadow-black/10' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}
+        /* Removed shadow-lg and shadow-black/10 from the template literal below */
+        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-body text-sm font-medium mb-1 ${isActive ? 'bg-black text-white' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}
       >
         <Icon size={18} />
-        <span>{label}</span>
+        {/* Added leading-none to remove extra vertical space/padding from text */}
+        <span className="leading-none pt-1">{label}</span>
       </Link>
     );
   };
@@ -213,7 +250,7 @@ export default function Dashboard({ user, setUser }) {
       <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="flex items-center gap-2">
            <Zap size={20} fill="black" />
-           <span className="font-bold text-lg">Echoly</span>
+           <span className="font-bold text-lg pt-2">Echoly</span>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-gray-100 rounded-lg">
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -223,15 +260,15 @@ export default function Dashboard({ user, setUser }) {
       {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 flex flex-col transform transition-transform duration-300 md:translate-x-0 md:static ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-8 hidden md:flex items-center gap-3">
-          <div className="bg-black p-2 rounded-xl shadow-lg shadow-black/10 text-white">
+          <div className="bg-black p-2 pt-2 rounded-xl shadow-md shadow-black/10 text-white">
             <Zap size={20} fill="currentColor" />
           </div>
-          <span className="font-bold text-2xl tracking-tight">Echoly</span>
+          <span className="font-bold text-2xl pt-2 tracking-tight">Echoly</span>
         </div>
 
         <nav className="flex-grow px-4 mt-4">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 mb-4">Main Menu</div>
-          <SidebarItem to="/dashboard" icon={Layout} label="Dashboard" exact />
+          <SidebarItem to="/dashboard" className='pt-2'icon={Layout} label="Dashboard" exact/>
           <SidebarItem to="/dashboard/vault" icon={Archive} label="Vault (History)" />
           
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 mb-4 mt-8">System</div>
@@ -283,34 +320,81 @@ export default function Dashboard({ user, setUser }) {
            <Routes>
             <Route path="/" element={
               <div className="space-y-10">
-                <div className="bg-white rounded-[32px] p-2 border border-gray-100 shadow-sm">
-                   <EngineWorkspace onRepurpose={handleRepurpose} isGenerating={isGenerating} cooldown={cooldown} />
+                <div className="bg-white rounded-[5px] p-2 border border-gray-100 shadow-sm">
+                  <EngineWorkspace onRepurpose={handleRepurpose} isGenerating={isGenerating} cooldown={cooldown} />
                 </div>
 
                 {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
 
+                {/* --- INSERT THE IMAGE PREVIEW CODE HERE --- */}
+                {generatedImage && (
+                  <div className="bg-white rounded-[32px] p-6 border border-gray-200 shadow-xl overflow-hidden animate-in fade-in zoom-in duration-500">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Generated Visual Mission Asset</h4>
+                      <button 
+                        onClick={() => setGeneratedImage(null)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <img 
+                      src={generatedImage} 
+                      alt="AI Generated Content" 
+                      className="w-full h-auto rounded-2xl border border-slate-100 shadow-inner"
+                    />
+                    <div className="mt-4 flex gap-4">
+                      <a 
+                        href={generatedImage} 
+                        download="echoly-visual.png" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-4 py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
+                      >
+                        Download High-Res
+                      </a>
+                    </div>
+                  </div>
+                )}
+
                 {/* TWO COLUMN GRID FOR RESULTS */}
                 {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
-                  // <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                   <div className="columns-1 md:columns-2 gap-6 space-y-6">
-
-
                       {Object.entries(bundle || {}).map(([platform, content]) => (
-                         <ResultCard 
+                        <ResultCard 
                             key={platform}
                             platform={platform} 
                             content={content} 
                             projectId={currentProjectId}
                             fetchHistory={fetchHistory}
                             onRegenerate={() => handleSingleRegenerate(platform)} 
-                         />
+                            // Don't forget to pass handleGenerateImage to the ResultCard!
+                            onGenerateImage={() => handleGenerateImage(content)} 
+                        />
                       ))}
                   </div>
                 )}
               </div>
             } />
             
-            <Route path="/vault" element={<VaultArchive projects={history} onRestore={handleRestore} fetchHistory={fetchHistory} />} />
+            
+            <Route path="/vault" element={
+              <VaultArchive 
+                projects={history} 
+                onRestore={handleRestore} 
+                fetchHistory={fetchHistory} 
+                onDelete={async (id) => {
+                  try {
+                    await axios.delete(`${API_BASE}/projects/${id}`, {
+                      headers: { 'x-auth-token': localStorage.getItem('token') }
+                    });
+                    fetchHistory(); // Refresh the list after deleting
+                  } catch (e) {
+                    alert("Delete failed");
+                  }
+                }} 
+              />
+            } />
             <Route path="/settings" element={<SettingsPage user={user} />} />
             <Route path="/about" element={<AboutPage user={user} />} />
           </Routes>

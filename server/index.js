@@ -183,7 +183,7 @@ app.get('/api/auth/me', auth, async (req, res) => {
 });
 // --- PLATFORM CONFIG ---
 const PLATFORMS_CONFIG = [
-  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook." },
+  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook. No markdown " },
   { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts." },
   { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script." },
   { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script." },
@@ -220,7 +220,16 @@ async function generatePlatformText(platformId, text, tone) {
                 ],
                 model: "llama-3.1-8b-instant", 
             });
-            return completion.choices[0].message.content;
+            // --- ADD CLEANING LOGIC HERE ---
+            let cleanResult = completion.choices[0].message.content;
+
+            // 1. Remove all double asterisks (**)
+            cleanResult = cleanResult.replace(/\*\*/g, '');
+
+            // 2. Remove all header symbols (#, ##, ###, ####)
+            cleanResult = cleanResult.replace(/#+/g, '');
+
+            return cleanResult;
         } catch (error) {
             if (error.status === 429 && attempts < maxAttempts - 1) {
                 attempts++;
@@ -415,27 +424,30 @@ app.delete('/api/projects/:projectId/asset/:platform', auth, async (req, res) =>
 });
 
 app.post('/api/generate-image-prompt', auth, async (req, res) => {
-    try {
-        const { platform, content } = req.body;
+  try {
+    const { content } = req.body;
+    const response = await groq.chat.completions.create({
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a professional prompt engineer. Generate a highly detailed, realistic image description based on the text provided. IMPORTANT: Output ONLY the prompt text. No markdown, no quotes, no 'Here is your prompt'." 
+        },
+        { role: "user", content: content }
+      ],
+      model: "llama-3.1-8b-instant",
+    });
 
-        const response = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are a world-class Art Director. Create a single, highly detailed image generation prompt (for DALL-E or Midjourney) that visually represents the provided text. Focus on lighting, composition, and mood. No talk, just the prompt."
-                },
-                {
-                    role: "user",
-                    content: `Platform: ${platform}\nPost Content: ${content}`
-                }
-            ]
-        });
+    // Clean the prompt to ensure no special characters break the next request
+    const cleanPrompt = response.choices[0].message.content
+      .replace(/\*\*/g, '')
+      .replace(/#/g, '')
+      .replace(/"/g, '')
+      .trim();
 
-        res.json({ prompt: response.choices[0].message.content });
-    } catch (e) {
-        res.status(500).json({ error: "Failed to generate visual prompt." });
-    }
+    res.json({ prompt: cleanPrompt });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to generate prompt" });
+  }
 });
 
 

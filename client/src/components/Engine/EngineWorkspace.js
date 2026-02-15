@@ -4,8 +4,7 @@ import {
   Link as LinkIcon, 
   Youtube, 
   FileAudio, 
-  UploadCloud, 
-  Zap, 
+  UploadCloud,  
   Check, 
   ArrowRight,
   Settings2
@@ -48,7 +47,7 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
   const activeFormat = INPUT_FORMATS.find(f => f.id === type);
 
   return (
-    <div className="bg-white rounded-xl shadow-lg shadow-zinc-200/40 border border-zinc-200 overflow-hidden flex flex-col lg:flex-row font-sans">
+    <div className="bg-white rounded shadow-lg shadow-zinc-200/40 border border-zinc-300 overflow-hidden flex flex-col lg:flex-row font-sans">
       
       {/* ==============================================
           LEFT PANEL: CONTROLS (Balanced Size)
@@ -128,7 +127,6 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
             <activeFormat.icon size={18} className="text-black" />
             <h2 className="text-sm font-black text-black uppercase tracking-tight">Input Content</h2>
           </div>
-          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest border border-zinc-200 px-2 py-0.5 rounded-md">Step 02</span>
         </div>
 
         {/* Dynamic Input Area (Height: 11rem / 176px) */}
