@@ -16,6 +16,39 @@ require('dotenv').config();
 
 // --- MODELS ---
 const User = require('./models/User');
+const app = express();
+// --- 1. BULLETPROOF CORS SETUP ---
+app.use((req, res, next) => {
+    // List your allowed origins clearly
+    const allowedOrigins = [
+        "http://localhost:3000",
+        "https://echoly-tau.vercel.app"
+    ];
+    
+    const origin = req.headers.origin;
+    
+    // Check if the request's origin is in our allowed list
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-auth-token, Authorization');
+
+    // Handle Preflight (OPTIONS) immediately with a 204 (No Content)
+    // This stops the request from hitting any logic that might crash
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    
+    next();
+});
+
+// --- 2. BODY PARSERS (Must be below CORS) ---
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 // --- DIRECTORY SETUP & CLEANUP ---
 const tempDir = 'temp_uploads';
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
@@ -67,18 +100,9 @@ cloudinary.config({
 });
 // Fixed: Define the model as a constant so it's accessible in the routes below
 const Project = mongoose.model('Project', ProjectSchema);
-
-const app = express();
-app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173"], // Allow React and Vite
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "x-auth-token"] // Matches your App.js header
-}));
-app.use(express.json());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Remove: const upload = multer({ dest: 'uploads/' });
+// Replace with:
 const upload = multer({ dest: tempDir + '/' });
 const JWT_SECRET = process.env.JWT_SECRET || 'COMMAND_GRID_SECRET_2026';
 
@@ -102,6 +126,9 @@ const auth = (req, res, next) => {
 };
 
 // --- AUTH ROUTES ---
+// --- AUTH ROUTES ---
+// --- AUTH ROUTES ---
+
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
     const { name, email, password } = req.body;
@@ -120,11 +147,11 @@ app.post('/api/auth/register', async (req, res) => {
             user: { id: user._id, email: user.email, name: user.name } 
         });
     } catch (err) {
-        console.error("DEBUGGING ERROR:", err); 
-        res.status(500).json({ 
-            msg: 'Server Error', 
-            actualError: err.message // This sends the secret error to your browser console
-        });
+        console.error("DEBUGGING ERROR:", err); // Look at your terminal for this!
+    res.status(500).json({ 
+        msg: 'Server Error', 
+        actualError: err.message // This sends the secret error to your browser console
+    });
     }
 });
 
@@ -156,18 +183,18 @@ app.get('/api/auth/me', auth, async (req, res) => {
 });
 // --- PLATFORM CONFIG ---
 const PLATFORMS_CONFIG = [
-  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook. Do not use markdown, bolding, or ** stars." },
-  { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts. Do not use markdown, bolding, or ** stars." },
-  { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script. Do not use markdown, bolding, or ** stars." },
-  { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script. Do not use markdown, bolding, or ** stars." },
-  { id: 'newsletter', prompt: "Newsletter Editor. Subject line + executive summary. Do not use markdown, bolding, or ** stars." },
-  { id: 'blog', prompt: "SEO tech blogger. 400-word draft. Do not use markdown, bolding, or ** stars." },
-  { id: 'threads', prompt: "Conversational Threads influencer. Do not use markdown, bolding, or ** stars." },
-  { id: 'facebook', prompt: "Community Manager. Story-driven post. Do not use markdown, bolding, or ** stars." },
-  { id: 'pinterest', prompt: "Pinterest SEO. Title and Description. Do not use markdown, bolding, or ** stars." },
-  { id: 'youtube', prompt: "YouTube Manager. Community tab update. Do not use markdown, bolding, or ** stars." },
-  { id: 'medium', prompt: "Thought Leadership Writer. Narrative summary. Do not use markdown, bolding, or ** stars." },
-  { id: 'reddit', prompt: "Expert Redditor. Subreddit-ready formatting. Do not use markdown, bolding, or ** stars." }
+  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook." },
+  { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts." },
+  { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script." },
+  { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script." },
+  { id: 'newsletter', prompt: "Newsletter Editor. Subject line + executive summary." },
+  { id: 'blog', prompt: "SEO tech blogger. 400-word draft." },
+  { id: 'threads', prompt: "Conversational Threads influencer." },
+  { id: 'facebook', prompt: "Community Manager. Story-driven post." },
+  { id: 'pinterest', prompt: "Pinterest SEO. Title and Description." },
+  { id: 'youtube', prompt: "YouTube Manager. Community tab update." },
+  { id: 'medium', prompt: "Thought Leadership Writer. Narrative summary." },
+  { id: 'reddit', prompt: "Expert Redditor. Subreddit-ready formatting." }
 ];
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -208,6 +235,8 @@ async function generatePlatformText(platformId, text, tone) {
 }
 
 // --- PROJECT ENGINE ROUTES ---
+// ... (Your imports remain the same)
+
 // Unified Repurpose Route
 app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => {
     // 1. SETUP SSE (Server-Sent Events) HEADERS
