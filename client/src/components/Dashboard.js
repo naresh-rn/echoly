@@ -189,26 +189,16 @@ const handleRepurpose = async (type, content, tone) => {
   };
 
 // Inside Dashboard.js
-const handleGenerateImage = async (platformContent) => {
-  const contentToVisualize = typeof platformContent === 'string' ? platformContent : "";
-  if (!contentToVisualize) return;
-
+const handleGenerateImage = async (content) => {
+  if (!content) return;
+  
   try {
     setIsGenerating(true);
     const token = localStorage.getItem('token');
 
-    // 1. Build the prompt (Check if this route is working!)
-    const promptRes = await axios.post(`${API_BASE}/generate-image-prompt`, 
-      { content: contentToVisualize }, 
-      { headers: { 'x-auth-token': token } }
-    );
-
-    const readyPrompt = promptRes.data.prompt || contentToVisualize;
-
-    // 2. Generate the image
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: contentToVisualize }, 
-      { headers: { 'x-auth-token': localStorage.getItem('token') } } // MUST match 'x-auth-token'
+      { prompt: content.substring(0, 500) }, 
+      { headers: { 'x-auth-token': token } }
     );
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
@@ -216,9 +206,8 @@ const handleGenerateImage = async (platformContent) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
   } catch (error) {
-    console.error("Dashboard Image Error:", error);
-    const serverError = error.response?.data?.error || "Connection error";
-    alert(`Error: ${serverError}`);
+    console.error("Image Error:", error);
+    alert("Image Engine is busy. Please try again in 5 seconds.");
   } finally {
     setIsGenerating(false);
   }

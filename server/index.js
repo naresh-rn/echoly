@@ -450,57 +450,56 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 // server/index.js
 // server/index.js
 
+// server/index.js
+
 app.post('/api/generate-image', auth, async (req, res) => {
-  // 1. TEST LOG - If you don't see this in Render, the 'auth' middleware is failing
-  console.log("=== IMAGE ROUTE HIT ===");
-  
   try {
     const { prompt } = req.body;
-    
-    // 2. LOG THE KEY STATUS (Hidden for security, just showing if it exists)
-    const key = process.env.HUGGINGFACE_API_KEY;
-    console.log("Key exists:", !!key);
-    if (key) console.log("Key starts with:", key.substring(0, 5));
+    const hfKey = process.env.HUGGINGFACE_API_KEY;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "No prompt provided" });
+    if (!hfKey) {
+      return res.status(500).json({ error: "Missing HF API Key" });
     }
 
-    // 3. THE CALL
-    console.log("Calling Hugging Face...");
+    console.log("🚀 Requesting image from HF with fixed headers...");
+
     const response = await axios({
       url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${key.trim()}`,
+        Authorization: `Bearer ${hfKey}`,
         "Content-Type": "application/json",
+        // THE FIX: We must tell HF we want an image, not JSON
+        Accept: "image/png", 
       },
       data: JSON.stringify({ inputs: prompt }),
-      responseType: 'arraybuffer',
-      timeout: 30000 
+      responseType: 'arraybuffer', // This stays as arraybuffer
     });
 
-    console.log("Hugging Face Success!");
+    console.log("✅ Image received from HF");
+
     const base64Image = Buffer.from(response.data).toString('base64');
-    res.json({ imageData: base64Image, mimeType: "image/png" });
+    res.json({ 
+      imageData: base64Image, 
+      mimeType: "image/png" 
+    });
 
   } catch (error) {
-    console.error("=== ERROR DETECTED ===");
+    // If HF fails (e.g., 503 Warming Up), use the Fallback
+    console.error("HF Failed, using Fallback. Error:", error.message);
     
-    // Handle the case where error.response.data is an arraybuffer (Hugging Face errors)
-    let errorMessage = error.message;
-    if (error.response && error.response.data) {
-        try {
-            const decodedError = Buffer.from(error.response.data).toString();
-            errorMessage = decodedError;
-            console.log("HF Error Data:", decodedError);
-        } catch (e) {
-            console.log("Could not decode error buffer");
-        }
+    try {
+      // Clean prompt for URL
+      const cleanPrompt = encodeURIComponent(req.body.prompt.substring(0, 150));
+      const fallbackUrl = `https://pollinations.ai/p/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true`;
+      
+      const fbRes = await axios.get(fallbackUrl, { responseType: 'arraybuffer' });
+      const base64 = Buffer.from(fbRes.data).toString('base64');
+      
+      return res.json({ imageData: base64, mimeType: "image/png" });
+    } catch (fbErr) {
+      res.status(500).json({ error: "All image engines failed." });
     }
-
-    console.error("Final Error Msg:", errorMessage);
-    res.status(500).json({ error: errorMessage || "Generation failed" });
   }
 });
 
