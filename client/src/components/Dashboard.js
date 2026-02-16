@@ -332,25 +332,54 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 
                 {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
 
-                {/* Dashboard.js - Image Preview Section */}
                 {generatedImage && (
-                  <div className="bg-white rounded-[32px] p-6 border border-gray-200 shadow-xl overflow-hidden animate-in fade-in zoom-in duration-500">
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Mission Visual Asset (16:9)</h4>
-                      <button onClick={() => setGeneratedImage(null)} className="text-gray-400 hover:text-red-500"><X size={18} /></button>
-                    </div>
-                    
-                    {/* Updated for 16:9 aspect ratio */}
-                    <div className="aspect-video w-full overflow-hidden rounded-2xl bg-gray-100 border border-slate-100">
-                      <img 
-                        src={generatedImage} 
-                        alt="AI Generated Content" 
-                        className="w-full h-full object-cover" // object-cover ensures it fills the 16:9 box
-                      />
-                    </div>
-                    
-                    <div className="mt-4">
-                      <a href={generatedImage} download="echoly-16-9.png" className="...">Download 4K Wide-Screen</a>
+                  <div className="max-w-6xl mx-auto mb-12 animate-in fade-in zoom-in duration-700">
+                    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-2xl overflow-hidden">
+                      
+                      {/* Asset Header */}
+                      <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+                            Master Visual Asset • 16:9 Ultra-Wide
+                          </span>
+                        </div>
+                        <button 
+                          onClick={() => setGeneratedImage(null)}
+                          className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-all"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+
+                      {/* The Image Wrapper - Prevents vertical stretching */}
+                      <div className="relative aspect-video bg-slate-900 group">
+                        <img 
+                          src={generatedImage} 
+                          alt="AI Visual" 
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
+                        
+                        {/* Subtle Overlay to make it feel like a professional system */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                      </div>
+
+                      {/* Export Footer */}
+                      <div className="px-8 py-6 flex justify-between items-center">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Resolution</span>
+                          <span className="text-xs font-bold">1024 x 576 (Web Optimized)</span>
+                        </div>
+                        
+                        <a 
+                          href={generatedImage} 
+                          download="EchoThread_Asset.png"
+                          className="flex items-center gap-2 bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm hover:bg-zinc-800 transition-all active:scale-95 shadow-xl shadow-black/10"
+                        >
+                          <Download size={16} />
+                          Export High-Res
+                        </a>
+                      </div>
                     </div>
                   </div>
                 )}

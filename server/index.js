@@ -448,51 +448,44 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 
 // --- MAIN IMAGE GENERATOR ---
 // server/index.js
-// server/index.js
-
-// server/index.js
 
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt, platform } = req.body;
     const hfKey = process.env.HUGGINGFACE_API_KEY;
 
-    // --- STEP 1: THE INTELLIGENCE LAYER (Summarize the content into a SUBJECT) ---
-    // We use Groq to find out what the image should actually be about.
+    // --- STEP 1: THE REPURPOSING BRAIN (Groq) ---
+    // We force the AI to think about "Transformation" and "Media"
     const brainResponse = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
-          content: "Summarize the core technical subject of this text into 3 words. (e.g., 'React JS Development', 'Financial Growth', 'Coffee Roasting')." 
+          content: `You are the Visual Director for EchoThread, an AI content repurposing system. 
+          Your job is to turn text into a 'Conceptual Tech Hero Image'.
+          STYLE RULES:
+          - Use visual metaphors for content growth: Prisms, expanding geometry, glowing data streams, or crystalline structures.
+          - For the subject '${prompt.substring(0, 50)}', design a centerpiece object.
+          - NO HUMANS. NO TEXT. NO LOGOS.
+          - Colors: Deep Slate, Electric Blue, and Pure White.` 
         },
-        { role: "user", content: prompt.substring(0, 500) }
+        { role: "user", content: `Subject: ${prompt}` }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    const coreSubject = brainResponse.choices[0].message.content.replace(/["'.]/g, '');
-    console.log("🎯 Extracted Subject:", coreSubject);
+    const visualSubject = brainResponse.choices[0].message.content.replace(/["'#]/g, '');
 
-    // --- STEP 2: APPLY THE STYLE PRESET ---
-    let stylePreset = "Cinematic photography, high-end commercial style, 8k, sharp focus";
-    
-    if (platform === 'linkedin' || platform === 'newsletter') {
-      stylePreset = "Modern minimalist office, professional software developer workspace, clean desk, Apple-style lighting, coding on monitor";
-    } else if (platform === 'twitter' || platform === 'x') {
-      stylePreset = "Digital futuristic coding aesthetic, glowing atom symbols, vibrant blue neon light leaks, dark high-tech background, masterpiece";
-    } else {
-      stylePreset = "Professional technology stock photography, bright airy office, depth of field, sharp details";
-    }
-
-    // --- STEP 3: CONSTRUCT THE FINAL DIRECTIVE ---
-    const finalVisualDirective = `
-      WIDE ANGLE 16:9. 
-      Subject: ${coreSubject}. 
-      Style: ${stylePreset}. 
-      Details: No text, no spelling errors, photorealistic, 8k resolution, professional composition.
+    // --- STEP 2: THE "CONTENT SYSTEM" PROMPT FORMULA ---
+    const finalDirective = `
+      WIDE ANGLE 16:9 CINEMATIC SHOT.
+      A professional digital art piece representing: ${visualSubject}.
+      Style: Minimalist high-tech masterpiece.
+      Environment: A vast, dark, infinite studio with volumetric fog and floor reflections.
+      Technical: Ray-traced glass, glowing neon edges, 8k resolution, Unreal Engine 5 render style, macro photography, sharp focus.
+      Constraints: No people, no faces, no hands, no text, no gibberish letters, no distorted objects.
     `.trim();
 
-    // --- STEP 4: CALL HUGGING FACE ---
+    // --- STEP 3: EXECUTE ---
     const response = await axios({
       url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
       method: "POST",
@@ -501,7 +494,7 @@ app.post('/api/generate-image', auth, async (req, res) => {
         "Content-Type": "application/json",
         Accept: "image/png",
       },
-      data: JSON.stringify({ inputs: finalVisualDirective }),
+      data: JSON.stringify({ inputs: finalDirective }),
       responseType: 'arraybuffer',
     });
 
@@ -509,8 +502,8 @@ app.post('/api/generate-image', auth, async (req, res) => {
     res.json({ imageData: base64Image, mimeType: "image/png" });
 
   } catch (error) {
-    console.error("Image Error:", error.message);
-    res.status(500).json({ error: "Failed to generate accurate image" });
+    console.error("Redesign Engine Error:", error.message);
+    res.status(500).json({ error: "System failed to visualize content." });
   }
 });
 
