@@ -390,7 +390,7 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 app.post('/api/generate-gemini-image', auth, async (req, res) => {
   try {
     const { prompt } = req.body;
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: `Generate a high-quality visual for: ${prompt}` }] }],
