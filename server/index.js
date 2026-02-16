@@ -454,14 +454,29 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, platform } = req.body; // We added platform here
     const hfKey = process.env.HUGGINGFACE_API_KEY;
 
-    if (!hfKey) {
-      return res.status(500).json({ error: "Missing HF API Key" });
+    // 1. AESTHETIC PRESET LOGIC (From your Reference)
+    let stylePreset = "Cinematic photography, high-end commercial style, 8k resolution, sharp focus";
+    
+    if (platform === 'linkedin' || platform === 'newsletter') {
+      stylePreset = "Professional 3D isometric illustration, minimalist tech aesthetic, Apple-style product photography, soft studio lighting";
+    } else if (platform === 'twitter' || platform === 'x' || platform === 'tiktok') {
+      stylePreset = "Cinematic futuristic scene, dark background with vibrant neon light leaks, octane render, dynamic composition";
+    } else if (platform === 'instagram') {
+      stylePreset = "Minimalist photography, natural soft sunlight, muted earthy tones, Leica photography style, peaceful atmosphere";
     }
 
-    console.log("🚀 Requesting image from HF with fixed headers...");
+    // 2. FORMULATING THE COMMAND (The "Secret Sauce")
+    const visualDirective = `
+      WIDE ANGLE 16:9 ASPECT RATIO.
+      ${stylePreset}. 
+      Core Subject: ${prompt.substring(0, 300)}. 
+      Technical: Masterpiece, highly detailed, photorealistic, depth of field, no text, no distorted faces.
+    `.trim();
+
+    console.log("🎨 Executing Visual Directive for:", platform);
 
     const response = await axios({
       url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
@@ -469,37 +484,22 @@ app.post('/api/generate-image', auth, async (req, res) => {
       headers: {
         Authorization: `Bearer ${hfKey}`,
         "Content-Type": "application/json",
-        // THE FIX: We must tell HF we want an image, not JSON
-        Accept: "image/png", 
+        Accept: "image/png",
       },
-      data: JSON.stringify({ inputs: prompt }),
-      responseType: 'arraybuffer', // This stays as arraybuffer
+      data: JSON.stringify({ 
+        inputs: visualDirective,
+        // Some models support parameters; others rely on the prompt description
+        parameters: { width: 1024, height: 576 } 
+      }),
+      responseType: 'arraybuffer',
     });
-
-    console.log("✅ Image received from HF");
 
     const base64Image = Buffer.from(response.data).toString('base64');
-    res.json({ 
-      imageData: base64Image, 
-      mimeType: "image/png" 
-    });
+    res.json({ imageData: base64Image, mimeType: "image/png" });
 
   } catch (error) {
-    // If HF fails (e.g., 503 Warming Up), use the Fallback
-    console.error("HF Failed, using Fallback. Error:", error.message);
-    
-    try {
-      // Clean prompt for URL
-      const cleanPrompt = encodeURIComponent(req.body.prompt.substring(0, 150));
-      const fallbackUrl = `https://pollinations.ai/p/${cleanPrompt}?width=1024&height=1024&model=flux&nologo=true`;
-      
-      const fbRes = await axios.get(fallbackUrl, { responseType: 'arraybuffer' });
-      const base64 = Buffer.from(fbRes.data).toString('base64');
-      
-      return res.json({ imageData: base64, mimeType: "image/png" });
-    } catch (fbErr) {
-      res.status(500).json({ error: "All image engines failed." });
-    }
+    console.error("HF Error:", error.message);
+    res.status(500).json({ error: "Generation failed" });
   }
 });
 

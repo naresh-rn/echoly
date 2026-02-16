@@ -189,7 +189,7 @@ const handleRepurpose = async (type, content, tone) => {
   };
 
 // Inside Dashboard.js
-const handleGenerateImage = async (content) => {
+const handleGenerateImage = async (content, platformName) => { // Added platformName
   if (!content) return;
   
   try {
@@ -197,7 +197,10 @@ const handleGenerateImage = async (content) => {
     const token = localStorage.getItem('token');
 
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: content.substring(0, 500) }, 
+      { 
+        prompt: content.substring(0, 400),
+        platform: platformName // Pass the platform for style picking
+      }, 
       { headers: { 'x-auth-token': token } }
     );
 
@@ -206,8 +209,7 @@ const handleGenerateImage = async (content) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
   } catch (error) {
-    console.error("Image Error:", error);
-    alert("Image Engine is busy. Please try again in 5 seconds.");
+    alert("Engine is processing high-quality weights. Try again in 5s.");
   } finally {
     setIsGenerating(false);
   }
@@ -330,42 +332,31 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 
                 {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
 
-                {/* --- INSERT THE IMAGE PREVIEW CODE HERE --- */}
+                {/* Dashboard.js - Image Preview Section */}
                 {generatedImage && (
                   <div className="bg-white rounded-[32px] p-6 border border-gray-200 shadow-xl overflow-hidden animate-in fade-in zoom-in duration-500">
                     <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Generated Visual Mission Asset</h4>
-                      <button 
-                        onClick={() => setGeneratedImage(null)}
-                        className="text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <X size={18} />
-                      </button>
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Mission Visual Asset (16:9)</h4>
+                      <button onClick={() => setGeneratedImage(null)} className="text-gray-400 hover:text-red-500"><X size={18} /></button>
                     </div>
-                    <img 
-                      src={generatedImage} 
-                      alt="AI Generated Content" 
-                      className="w-full h-auto rounded-2xl border border-slate-100 shadow-inner"
-                    />
-                    <div className="mt-4 flex gap-4">
-                      <a 
-                        href={generatedImage} 
-                        download="echoly-visual.png" 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-4 py-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
-                      >
-                        Download High-Res
-                      </a>
+                    
+                    {/* Updated for 16:9 aspect ratio */}
+                    <div className="aspect-video w-full overflow-hidden rounded-2xl bg-gray-100 border border-slate-100">
+                      <img 
+                        src={generatedImage} 
+                        alt="AI Generated Content" 
+                        className="w-full h-full object-cover" // object-cover ensures it fills the 16:9 box
+                      />
+                    </div>
+                    
+                    <div className="mt-4">
+                      <a href={generatedImage} download="echoly-16-9.png" className="...">Download 4K Wide-Screen</a>
                     </div>
                   </div>
                 )}
-
                 {/* TWO COLUMN GRID FOR RESULTS */}
                 {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
                   <div className="columns-1 md:columns-2 gap-6 space-y-6">
-                      // ... (Inside Dashboard return, locate the ResultCard mapping)
-
                       {Object.entries(bundle || {}).map(([platform, content]) => (
                         <ResultCard 
                             key={platform}
