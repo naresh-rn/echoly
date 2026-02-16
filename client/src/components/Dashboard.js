@@ -193,22 +193,20 @@ const handleGenerateImage = async (platformContent) => {
     setIsGenerating(true);
     const token = localStorage.getItem('token');
 
-    const res = await axios.post(`${API_BASE}/generate-gemini-image`, 
-      { prompt: platformContent.substring(0, 300) },
+    const res = await axios.post(`${API_BASE}/generate-image`, 
+      { prompt: platformContent.substring(0, 400) }, // Keep prompt concise
       { headers: { 'x-auth-token': token } }
     );
 
-    // Construct valid Data URI
-    const base64Image = `data:${res.data.mimeType};base64,${res.data.imageData}`;
-    setGeneratedImage(base64Image);
+    const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
+    setGeneratedImage(imageUrl);
   } catch (error) {
     console.error("Image Gen Error:", error);
-    alert("Check if your Backend is deployed with the /api/generate-gemini-image route.");
+    alert("The image engine is warming up. Please try again in 10 seconds.");
   } finally {
     setIsGenerating(false);
   }
 };
-
   const handleLogout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -216,19 +214,18 @@ const handleGenerateImage = async (platformContent) => {
   };
 
   // Helper component for Sidebar Links
-  const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
+const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
   const isActive = exact ? location.pathname === to : location.pathname.includes(to);
   return (
     <Link 
       to={to} 
-      onClick={() => setIsMobileMenuOpen(false)}
-      // REMOVED shadow-lg shadow-black/10 and py-3.5 changed to py-3
       className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-body text-sm font-medium mb-1 ${
         isActive ? 'bg-black text-white' : 'text-gray-500 hover:text-black hover:bg-gray-100'
       }`}
+      // shadow-lg and shadow-black/10 have been removed above
     >
       <Icon size={18} />
-      {/* Added leading-none and flex to fix vertical centering */}
+      {/* leading-none and flex items-center removes the 2px top gap */}
       <span className="leading-none flex items-center">{label}</span>
     </Link>
   );

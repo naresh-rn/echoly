@@ -387,30 +387,26 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 });
 
 
-app.post('/api/generate-gemini-image', auth, async (req, res) => {
+app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt } = req.body;
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: `Generate a high-quality visual for: ${prompt}` }] }],
-      generationConfig: { responseModalities: ["IMAGE"] }, // Requirement from @google/genai
+    const response = await axios({
+      url: "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5",
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`, // Optional but recommended
+        "Content-Type": "application/json",
+      },
+      data: JSON.stringify({ inputs: prompt }),
+      responseType: 'arraybuffer', // Crucial for receiving image data
     });
 
-    const response = await result.response;
-    const imagePart = response.candidates[0].content.parts.find(p => p.inlineData);
-
-    if (imagePart) {
-      res.json({ 
-        imageData: imagePart.inlineData.data, 
-        mimeType: imagePart.inlineData.mimeType 
-      });
-    } else {
-      res.status(400).send("No image data returned from Gemini.");
-    }
+    const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+    res.json({ imageData: base64Image, mimeType: "image/png" });
   } catch (error) {
-    console.error("Backend Error:", error);
-    res.status(500).send("Internal Server Error");
+    console.error("Hugging Face Error:", error.message);
+    res.status(500).send("Image generation failed");
   }
 });
 
