@@ -233,7 +233,7 @@ export default function ResultCard({
 
         {!realImage && (
         <button 
-          onClick={onGenerateImage}
+          onClick={() => onGenerateImage(card.content)}
           disabled={isGenerating} // Disable button while loading
           className={`ml-auto flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all 
             ${isGenerating ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}

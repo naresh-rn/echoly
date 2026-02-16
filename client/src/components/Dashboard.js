@@ -188,13 +188,22 @@ const fetchHistory = useCallback(async () => {
     URL.revokeObjectURL(url);
   };
 
-const handleGenerateImage = async (platformContent) => {
+// Inside Dashboard.js
+const handleGenerateImage = async (input) => {
   try {
+    // FIX: Ensure we are using a string. 
+    // If 'input' is an Event object or undefined, fallback to rawText or empty string.
+    const platformContent = typeof input === 'string' ? input : (rawText || "");
+
+    if (!platformContent) {
+      return alert("No content found to generate an image.");
+    }
+
     setIsGenerating(true);
     const token = localStorage.getItem('token');
 
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: platformContent.substring(0, 400) }, // Keep prompt concise
+      { prompt: platformContent.substring(0, 400) }, 
       { headers: { 'x-auth-token': token } }
     );
 
@@ -207,6 +216,7 @@ const handleGenerateImage = async (platformContent) => {
     setIsGenerating(false);
   }
 };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     setUser(null);
