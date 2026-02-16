@@ -189,28 +189,36 @@ const fetchHistory = useCallback(async () => {
   };
 
 // Inside Dashboard.js
-const handleGenerateImage = async (input) => {
+const handleGenerateImage = async (platformContent) => {
+  // Ensure we are working with a string, not a React Event
+  const contentToVisualize = typeof platformContent === 'string' ? platformContent : "";
+  
+  if (!contentToVisualize) return;
+
   try {
-    // FIX: Ensure we are using a string. 
-    // If 'input' is an Event object or undefined, fallback to rawText or empty string.
-    const platformContent = typeof input === 'string' ? input : (rawText || "");
-
-    if (!platformContent) {
-      return alert("No content found to generate an image.");
-    }
-
     setIsGenerating(true);
     const token = localStorage.getItem('token');
 
+    // 1. Get a visual prompt first
+    const promptRes = await axios.post(`${API_BASE}/generate-image-prompt`, 
+      { content: contentToVisualize }, 
+      { headers: { 'x-auth-token': token } }
+    );
+
+    // 2. Generate the actual image using that prompt
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: platformContent.substring(0, 400) }, 
+      { prompt: promptRes.data.prompt }, 
       { headers: { 'x-auth-token': token } }
     );
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
     setGeneratedImage(imageUrl);
+    
+    // Smooth scroll to top to see the image
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
   } catch (error) {
-    console.error("Image Gen Error:", error);
+    console.error("Image Error:", error);
     alert("The image engine is warming up. Please try again in 10 seconds.");
   } finally {
     setIsGenerating(false);
@@ -377,17 +385,10 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
                             content={content} 
                             projectId={currentProjectId}
                             fetchHistory={fetchHistory}
-                            isGenerating={isGenerating} // PASS THIS PROP
+                            isGenerating={isGenerating} // Pass loading state
                             onRegenerate={() => handleSingleRegenerate(platform)} 
-                            onGenerateImage={(text) => handleGenerateImage(text)} // PASS THE TEXT
-                            onShare={() => {
-                              if (navigator.share) {
-                                navigator.share({ title: `Echoly ${platform}`, text: content });
-                              } else {
-                                navigator.clipboard.writeText(content);
-                                alert("Copied to clipboard!");
-                              }
-                            }}
+                            onGenerateImage={handleGenerateImage} // Pass function
+                            onShare={() => { /* share logic */ }}
                         />
                       ))}
                   </div>

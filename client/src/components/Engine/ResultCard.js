@@ -5,8 +5,7 @@ import {
   RefreshCw, Image as ImageIcon, MoreVertical, Wand2,
 } from 'lucide-react';
 
-const API_BASE =
-  (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
+const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
 
 export default function ResultCard({
   platform,
@@ -14,9 +13,9 @@ export default function ResultCard({
   projectId,
   fetchHistory,
   onRegenerate, 
-  onGenerateImage, 
+  onGenerateImage, // Handled by Dashboard
   onShare,
-  isGenerating 
+  isGenerating // Loading state from Dashboard
 }) {
 
   // ---------------- STATE ----------------
@@ -24,8 +23,6 @@ export default function ResultCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
   const [copied, setCopied] = useState(false);
-  const [realImage, setRealImage] = useState(null);
-  const [imageLoading, setImageLoading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -56,7 +53,7 @@ export default function ResultCard({
 
   const handleShare = () => {
     if (onShare) {
-      onShare(); // Use the logic passed from Dashboard
+      onShare(); 
     } else if (navigator.share) {
       navigator.share({ title: `Echoly ${platform}`, text: editedContent });
     } else {
@@ -81,36 +78,6 @@ export default function ResultCard({
     }
   };
 
-  const generateImage = async () => {
-    setImageLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.post(
-        `${API_BASE}/generate-image-prompt`,
-        { platform, content: editedContent.substring(0, 500) },
-        { headers: { "x-auth-token": token } }
-      );
-
-      // Clean the prompt of markdown symbols before encoding
-      const cleanPrompt = res.data.prompt
-        .replace(/\*\*/g, '')
-        .replace(/#/g, '')
-        .replace(/"/g, '')
-        .trim();
-
-      const encodedPrompt = encodeURIComponent(cleanPrompt);
-      const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1024&height=1024&seed=${Math.floor(Math.random()*100000)}&model=flux&nologo=true`;
-
-      setRealImage(imageUrl);
-      // Optional: Update dashboard global state if needed
-      if(onGenerateImage) onGenerateImage(imageUrl); 
-    } catch {
-      alert("Visualization failed.");
-    } finally {
-      setImageLoading(false);
-    }
-  };
-
   if (isDeleting) return null;
 
   return (
@@ -126,7 +93,6 @@ export default function ResultCard({
         </div>
 
         <div className="flex items-center gap-1">
-          {/* SHARE BUTTON ADDED HERE */}
           <button
             onClick={handleShare}
             className="p-2.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-colors"
@@ -181,45 +147,30 @@ export default function ResultCard({
         </div>
       </div>
 
-      {/* CONTENT */}
+      {/* CONTENT AREA */}
       <div className="px-9 pb-8">
         {isEditing ? (
-          <textarea
-            className="w-full min-h-[220px] bg-gray-50 rounded-3xl p-6 text-[15px] resize-none focus:ring-2 focus:ring-indigo-100 outline-none border-none"
-            value={editedContent}
-            onChange={(e)=>setEditedContent(e.target.value)}
-          />
+          <div className="flex flex-col gap-4">
+            <textarea
+              className="w-full min-h-[220px] bg-gray-50 rounded-3xl p-6 text-[15px] resize-none focus:ring-2 focus:ring-indigo-100 outline-none border-none"
+              value={editedContent}
+              onChange={(e)=>setEditedContent(e.target.value)}
+            />
+            <button 
+              onClick={() => setIsEditing(false)}
+              className="self-start bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest"
+            >
+              SAVE CHANGES
+            </button>
+          </div>
         ) : (
           <p className="text-[17px] leading-[1.7] text-gray-700 whitespace-pre-wrap">
             {editedContent}
           </p>
         )}
-        
-        {/* SAVE BUTTON FOR EDITING */}
-        {isEditing && (
-          <button 
-            onClick={() => setIsEditing(false)}
-            className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-xl text-xs font-bold"
-          >
-            SAVE CHANGES
-          </button>
-        )}
-
-        {(realImage || imageLoading) && (
-          <div className="mt-8 rounded-[2rem] overflow-hidden border bg-gray-50 aspect-video relative">
-            {imageLoading ? (
-              <div className="flex flex-col items-center justify-center h-full gap-3">
-                <Wand2 className="animate-spin text-indigo-500" size={32}/>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Generating Visual...</span>
-              </div>
-            ) : (
-              <img src={realImage} className="w-full h-full object-cover animate-in fade-in duration-700" alt="AI visual"/>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* FOOTER */}
+      {/* FOOTER ACTIONS */}
       <div className="px-8 py-5 bg-gray-50/40 border-t flex justify-between items-center">
         <button
           onClick={handleCopy}
@@ -231,10 +182,9 @@ export default function ResultCard({
           {copied ? "COPIED" : "COPY TEXT"}
         </button>
 
-        {!realImage && (
         <button 
-          onClick={() => onGenerateImage(card.content)}
-          disabled={isGenerating} // Disable button while loading
+          onClick={() => onGenerateImage(editedContent)} // FIXED: Explicitly pass content string
+          disabled={isGenerating} 
           className={`ml-auto flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all 
             ${isGenerating ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
           >
@@ -248,10 +198,9 @@ export default function ResultCard({
               <ImageIcon size={14} /> Create Visual
             </>
           )}
-          </button>
-        )}
+        </button>
 
-        <span className="text-[10px] font-black text-gray-300">
+        <span className="ml-4 text-[10px] font-black text-gray-300">
           {editedContent.length} CHARS
         </span>
       </div>
@@ -270,9 +219,6 @@ export default function ResultCard({
               <p className="text-3xl leading-[1.5] text-gray-800 whitespace-pre-wrap font-medium">
                 {editedContent}
               </p>
-              {realImage && (
-                <img src={realImage} className="mt-10 rounded-3xl w-full shadow-2xl border border-gray-100" alt="Expanded AI visual"/>
-              )}
             </div>
           </div>
         </div>

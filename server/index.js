@@ -387,41 +387,6 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 });
 
 
-// server/index.js
-app.post('/api/generate-image', async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    const response = await axios({
-      url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      data: JSON.stringify({ inputs: prompt }),
-      responseType: 'arraybuffer',
-    });
-
-    // Convert the binary data to a base64 string safely
-    const base64Image = Buffer.from(response.data).toString('base64');
-    
-    res.json({ 
-      imageData: base64Image, 
-      mimeType: "image/png" 
-    });
-
-  } catch (error) {
-    // If Hugging Face is still warming up (503 error), send a specific message
-    if (error.response?.status === 503) {
-      return res.status(503).json({ error: "Image engine is waking up. Try again in 5 seconds." });
-    }
-    
-    console.error("HF Error:", error.message);
-    res.status(500).json({ error: "Failed to generate image." });
-  }
-});
-
 app.get('/api/history', auth, async (req, res) => {
     try {
         const history = await Project.find({ userId: req.user.id }).sort({ createdAt: -1 });
@@ -459,6 +424,7 @@ app.delete('/api/projects/:projectId/asset/:platform', auth, async (req, res) =>
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// --- IMAGE PROMPT GENERATOR ---
 app.post('/api/generate-image-prompt', auth, async (req, res) => {
   try {
     const { content } = req.body;
@@ -466,20 +432,42 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
       messages: [
         { 
           role: "system", 
-          content: "You are a professional prompt engineer. Return ONLY a 20-word visual description. DO NOT use quotes, DO NOT use bolding, DO NOT say 'Here is your prompt'. Just raw text." 
+          content: "You are a professional prompt engineer. Return ONLY a 20-word visual description. DO NOT use quotes, DO NOT use bolding. Just raw text." 
         },
         { role: "user", content: `Context: ${content}` }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    // Final safety scrub before sending to frontend
-    let prompt = response.choices[0].message.content;
-    prompt = prompt.replace(/["'**#]/g, '').replace(/\n/g, ' ').trim();
-
-    res.json({ prompt: prompt });
+    let prompt = response.choices[0].message.content.replace(/["'**#]/g, '').replace(/\n/g, ' ').trim();
+    res.json({ prompt });
   } catch (error) {
     res.status(500).json({ error: "Failed to create prompt" });
+  }
+});
+
+// --- MAIN IMAGE GENERATOR ---
+app.post('/api/generate-image', auth, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    const response = await axios({
+      url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      data: JSON.stringify({ inputs: prompt }),
+      responseType: 'arraybuffer',
+    });
+
+    const base64Image = Buffer.from(response.data).toString('base64');
+    res.json({ imageData: base64Image, mimeType: "image/png" });
+  } catch (error) {
+    if (error.response?.status === 503) {
+      return res.status(503).json({ error: "Engine warming up. Try again in 5 seconds." });
+    }
+    res.status(500).json({ error: "Image generation failed." });
   }
 });
 
