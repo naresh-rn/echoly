@@ -448,68 +448,59 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 
 // --- MAIN IMAGE GENERATOR ---
 // server/index.js
-
 // server/index.js
 
 app.post('/api/generate-image', auth, async (req, res) => {
+  // 1. TEST LOG - If you don't see this in Render, the 'auth' middleware is failing
+  console.log("=== IMAGE ROUTE HIT ===");
+  
   try {
     const { prompt } = req.body;
+    
+    // 2. LOG THE KEY STATUS (Hidden for security, just showing if it exists)
+    const key = process.env.HUGGINGFACE_API_KEY;
+    console.log("Key exists:", !!key);
+    if (key) console.log("Key starts with:", key.substring(0, 5));
 
-    // 1. Check if Prompt exists
     if (!prompt) {
-      console.error("❌ Error: No prompt provided in request body");
-      return res.status(400).json({ error: "Prompt is required" });
+      return res.status(400).json({ error: "No prompt provided" });
     }
 
-    // 2. Check if API Key is loaded
-    if (!process.env.HUGGINGFACE_API_KEY) {
-      console.error("❌ Error: HUGGINGFACE_API_KEY is missing from .env or Render Settings");
-      return res.status(500).json({ error: "Server configuration error: Missing API Key" });
-    }
-
-    console.log("🚀 Attempting Hugging Face call with prompt:", prompt.substring(0, 50));
-
-    // 3. The Hugging Face Call
+    // 3. THE CALL
+    console.log("Calling Hugging Face...");
     const response = await axios({
       url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY.trim()}`,
+        "Authorization": `Bearer ${key.trim()}`,
         "Content-Type": "application/json",
       },
       data: JSON.stringify({ inputs: prompt }),
       responseType: 'arraybuffer',
-      timeout: 40000, // Increase timeout for Render's slow network
+      timeout: 30000 
     });
 
-    console.log("✅ Hugging Face responded successfully");
-
+    console.log("Hugging Face Success!");
     const base64Image = Buffer.from(response.data).toString('base64');
     res.json({ imageData: base64Image, mimeType: "image/png" });
 
   } catch (error) {
-    // 4. Detailed Error Logging
-    console.error("❌ BACKEND IMAGE ERROR:");
-    if (error.response) {
-      // The API responded with an error (401, 403, 503, etc.)
-      const errorMsg = error.response.data instanceof Buffer 
-        ? error.response.data.toString() 
-        : JSON.stringify(error.response.data);
-      
-      console.error(`Status: ${error.response.status}`);
-      console.error(`Data: ${errorMsg}`);
-      
-      if (error.response.status === 503) {
-        return res.status(503).json({ error: "Model is loading. Try again in 10 seconds." });
-      }
-      if (error.response.status === 401) {
-        return res.status(401).json({ error: "Invalid Hugging Face API Key. Check your settings." });
-      }
-    } else {
-      console.error(`Message: ${error.message}`);
+    console.error("=== ERROR DETECTED ===");
+    
+    // Handle the case where error.response.data is an arraybuffer (Hugging Face errors)
+    let errorMessage = error.message;
+    if (error.response && error.response.data) {
+        try {
+            const decodedError = Buffer.from(error.response.data).toString();
+            errorMessage = decodedError;
+            console.log("HF Error Data:", decodedError);
+        } catch (e) {
+            console.log("Could not decode error buffer");
+        }
     }
 
-    res.status(500).json({ error: "Internal server error during image generation." });
+    console.error("Final Error Msg:", errorMessage);
+    res.status(500).json({ error: errorMessage || "Generation failed" });
   }
 });
 

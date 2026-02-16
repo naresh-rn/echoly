@@ -207,8 +207,8 @@ const handleGenerateImage = async (platformContent) => {
 
     // 2. Generate the image
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: readyPrompt }, 
-      { headers: { 'x-auth-token': token } }
+      { prompt: contentToVisualize }, 
+      { headers: { 'x-auth-token': localStorage.getItem('token') } } // MUST match 'x-auth-token'
     );
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
