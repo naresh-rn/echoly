@@ -189,31 +189,24 @@ const handleRepurpose = async (type, content, tone) => {
   };
 
 // Inside Dashboard.js
-const handleGenerateImage = async (content, platformName) => { // Added platformName
+const handleGenerateImage = async (content, platformName) => {
   if (!content) return;
-  
   try {
     setIsGenerating(true);
     const token = localStorage.getItem('token');
-
+    
+    // Call the new Puter-powered backend
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { 
-        prompt: content.substring(0, 400),
-        platform: platformName // Pass the platform for style picking
-      }, 
+      { prompt: content, platform: platformName }, 
       { headers: { 'x-auth-token': token } }
     );
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
     setGeneratedImage(imageUrl);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  // Inside handleGenerateImage in Dashboard.js
-    } catch (error) {
-        console.error("Dashboard Image Error:", error);
-        // Updated alert for Pollinations
-        alert("The visual engine is busy creating your asset. Please try again in a few seconds.");
-    } finally {
+  } catch (error) {
+    alert("Puter AI is busy. Please try again in a few seconds.");
+  } finally {
     setIsGenerating(false);
   }
 };
@@ -335,57 +328,46 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 
                 {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
 
-                {generatedImage && (
-                  <div className="max-w-6xl mx-auto mb-12 animate-in fade-in zoom-in duration-700">
-                    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-2xl overflow-hidden">
-                      
-                      {/* Asset Header */}
-                      <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
-                            Master Visual Asset • 16:9 Ultra-Wide
-                          </span>
-                        </div>
-                        <button 
-                          onClick={() => setGeneratedImage(null)}
-                          className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-all"
-                        >
-                          <X size={20} />
-                        </button>
-                      </div>
+                // Inside Dashboard.js - Update your preview section
 
-                      {/* The Image Wrapper - Prevents vertical stretching */}
-                      <div className="relative aspect-video bg-slate-900 group">
-                        <img 
-                          src={generatedImage} 
-                          alt="AI Visual" 
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                        
-                        {/* Subtle Overlay to make it feel like a professional system */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
-                      </div>
+{generatedImage && (
+  <div className="max-w-6xl mx-auto mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-2xl overflow-hidden">
+      
+      {/* Visual Header */}
+      <div className="px-8 py-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          EchoThread Visual Engine (Powered by Puter)
+        </span>
+        <button onClick={() => setGeneratedImage(null)} className="text-gray-400 hover:text-red-500">
+          <X size={18} />
+        </button>
+      </div>
 
-                      {/* Export Footer */}
-                      <div className="px-8 py-6 flex justify-between items-center">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Resolution</span>
-                          <span className="text-xs font-bold">1024 x 576 (Web Optimized)</span>
-                        </div>
-                        
-                        <a 
-                          href={generatedImage} 
-                          download="EchoThread_Asset.png"
-                          className="flex items-center gap-2 bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm hover:bg-zinc-800 transition-all active:scale-95 shadow-xl shadow-black/10"
-                        >
-                          <Download size={16} />
-                          Export High-Res
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                )}
+      {/* 16:9 Aspect Ratio Container */}
+      <div className="aspect-video w-full bg-slate-900 overflow-hidden group">
+        <img 
+          src={generatedImage} 
+          alt="Puter AI Visual" 
+          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+        />
+      </div>
+
+      {/* Actions */}
+      <div className="p-6 flex justify-between items-center bg-white">
+        <div className="text-[10px] font-bold text-slate-300">1024 x 576 • 4K UPSCALE</div>
+        <a 
+          href={generatedImage} 
+          download="asset-visual.png"
+          className="bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-black/10 hover:bg-zinc-800 transition-all"
+        >
+          Export High-Res Asset
+        </a>
+      </div>
+    </div>
+  </div>
+)}
+
                 {/* TWO COLUMN GRID FOR RESULTS */}
                 {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
                   <div className="columns-1 md:columns-2 gap-6 space-y-6">

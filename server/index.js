@@ -449,98 +449,25 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 // --- MAIN IMAGE GENERATOR ---
 // server/index.js
 
-// server/index.js
-
-// app.post('/api/generate-image', auth, async (req, res) => {
-//   try {
-//     const { prompt, platform } = req.body;
-//     const hfKey = process.env.HUGGINGFACE_API_KEY;
-
-//     // --- STEP 1: SEMANTIC INPUT DECOMPOSITION ---
-//     // We force Groq to extract the specific "vibe" of the actual text
-//     const brainResponse = await groq.chat.completions.create({
-//       messages: [
-//         { 
-//           role: "system", 
-//           content: `You are a Visual Semantic Engineer. 
-//           Extract the SOUL of the user's text and turn it into a 3-part visual blueprint.
-//           Output ONLY a JSON-like structure (no chat):
-//           {
-//             "subject": "The literal or symbolic object based on the text",
-//             "action": "How the object behaves or glows",
-//             "environment": "The mystical setting that reflects the text's tone"
-//           }`
-//         },
-//         { role: "user", content: `Analyze this content and create a fantasy blueprint: "${prompt.substring(0, 500)}"` }
-//       ],
-//       model: "llama-3.1-8b-instant",
-//       temperature: 0.7, // Adds creative variety
-//     });
-
-//     const blueprint = JSON.parse(brainResponse.choices[0].message.content);
-//     console.log("🛠️ Visual Blueprint:", blueprint);
-
-//     // --- STEP 2: DYNAMIC COLOR MAPPING ---
-//     // We assign colors based on the platform to match the brand psychology
-//     const colorMap = {
-//       linkedin: "Electric blue, silver filigree, and crystalline white",
-//       newsletter: "Warm amber, deep forest green, and gold leaf",
-//       twitter: "Cyan neon, deep obsidian, and violet sparks",
-//       default: "Bioluminescent teal, magenta mist, and ethereal gold"
-//     };
-//     const palette = colorMap[platform] || colorMap.default;
-
-//     // --- STEP 3: THE HIGH-FIDELITY PROMPT CONSTRUCTOR ---
-//     const finalVisualDirective = `
-//       [CORE]: A hyper-detailed ${blueprint.subject} ${blueprint.action}. 
-//       [ENVIRONMENT]: Set within a ${blueprint.environment}. 
-//       [STYLE]: Surreal magical realism, bioluminescent flora, floating particles of light.
-//       [LIGHTING]: Volumetric god-rays, rim lighting, glowing ${palette}.
-//       [TECHNICAL]: 8k, Unreal Engine 5.4 render, sharp focus, macro photography, octane render, masterpiece.
-//       [NEGATIVE]: No humans, no text, no blur, no low-quality, no distorted shapes.
-//     `.trim();
-
-//     // --- STEP 4: STABLE INFERENCE CALL ---
-//     const response = await axios({
-//       url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
-//       method: "POST",
-//       headers: {
-//         Authorization: `Bearer ${hfKey}`,
-//         "Content-Type": "application/json",
-//       },
-//       data: JSON.stringify({ 
-//         inputs: finalVisualDirective,
-//         parameters: { guidance_scale: 7.5, num_inference_steps: 4 } 
-//       }),
-//       responseType: 'arraybuffer',
-//     });
-
-//     const base64Image = Buffer.from(response.data).toString('base64');
-//     res.json({ imageData: base64Image, mimeType: "image/png" });
-
-//   } catch (error) {
-//     console.error("Critical Image Error:", error.message);
-//     res.status(500).json({ error: "Input processing failed." });
-//   }
-// });
-
-// server/index.js
-
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt, platform } = req.body;
+    const puterKey = process.env.PUTER_API_KEY;
 
-    // --- STEP 1: THE VISUAL BRAIN (Keep this for high quality) ---
+    if (!puterKey) {
+      return res.status(500).json({ error: "Puter API Key is missing." });
+    }
+
+    // --- STEP 1: THE VISUAL BRAIN (Groq) ---
+    // This ensures the image is relevant to your content (React, etc.)
     const brainResponse = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
           content: `You are the Visual Director for EchoThread. 
-          Convert the user's topic into a CONCEPTUAL TECH METAPHOR.
-          - Style: 16:9 Wide angle, minimalist, 8k, Unreal Engine 5 render.
-          - Subject: Describe a single glowing 3D object (glass, neon, crystalline).
-          - NO HUMANS. NO TEXT.
-          - Dominant Colors: Electric Blue and Deep Slate.` 
+          Translate the user's content into a professional CONCEPTUAL VISUAL METAPHOR.
+          Style: High-end 3D tech render, cinematic, 16:9 aspect ratio.
+          Constraint: NO HUMANS, NO TEXT, NO FACES.` 
         },
         { role: "user", content: prompt.substring(0, 400) }
       ],
@@ -548,36 +475,34 @@ app.post('/api/generate-image', auth, async (req, res) => {
     });
 
     const visualMetaphor = brainResponse.choices[0].message.content.replace(/["'#]/g, '');
-    
-    // --- STEP 2: CONSTRUCT POLLINATIONS URL ---
-    // 1024x576 is the perfect 16:9 ratio for Youtube/Web headers
-    const width = 1024;
-    const height = 576;
-    const seed = Math.floor(Math.random() * 1000000); // Ensures a unique image every time
-    const encodedPrompt = encodeURIComponent(visualMetaphor);
-    
-    // Using the 'flux' model on Pollinations for the best quality
-    const pollinationsUrl = `https://pollinations.ai/p/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true`;
+    console.log("🎯 Puter Subject:", visualMetaphor);
 
-    console.log("🎨 Pollinations Request:", visualMetaphor.substring(0, 50));
-
-    // --- STEP 3: FETCH THE IMAGE ---
-    const response = await axios.get(pollinationsUrl, {
+    // --- STEP 2: CALL PUTER.AI ---
+    // We use the txt2img endpoint. Puter is very fast and high-quality.
+    const response = await axios({
+      url: "https://api.puter.com/v1/ai/txt2img",
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${puterKey.trim()}`,
+        "Content-Type": "application/json",
+      },
+      data: {
+        prompt: `${visualMetaphor}, professional digital art, 8k, cinematic lighting, 16:9 wide angle, unreal engine 5 style, masterpiece`,
+        width: 1024,
+        height: 576, // This forces the 16:9 ratio
+      },
       responseType: 'arraybuffer',
-      timeout: 30000
     });
 
-    // --- STEP 4: RETURN AS BASE64 ---
     const base64Image = Buffer.from(response.data).toString('base64');
-    
     res.json({ 
       imageData: base64Image, 
       mimeType: "image/png" 
     });
 
   } catch (error) {
-    console.error("Pollinations Error:", error.message);
-    res.status(500).json({ error: "Failed to generate image via Pollinations." });
+    console.error("Puter Engine Error:", error.message);
+    res.status(500).json({ error: "Puter AI failed to generate the asset." });
   }
 });
 
