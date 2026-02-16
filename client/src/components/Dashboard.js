@@ -190,36 +190,35 @@ const handleRepurpose = async (type, content, tone) => {
 
 // Inside Dashboard.js
 const handleGenerateImage = async (platformContent) => {
-  // Ensure we are working with a string, not a React Event
   const contentToVisualize = typeof platformContent === 'string' ? platformContent : "";
-  
   if (!contentToVisualize) return;
 
   try {
     setIsGenerating(true);
     const token = localStorage.getItem('token');
 
-    // 1. Get a visual prompt first
+    // 1. Build the prompt (Check if this route is working!)
     const promptRes = await axios.post(`${API_BASE}/generate-image-prompt`, 
       { content: contentToVisualize }, 
       { headers: { 'x-auth-token': token } }
     );
 
-    // 2. Generate the actual image using that prompt
+    const readyPrompt = promptRes.data.prompt || contentToVisualize;
+
+    // 2. Generate the image
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: promptRes.data.prompt }, 
+      { prompt: readyPrompt }, 
       { headers: { 'x-auth-token': token } }
     );
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
     setGeneratedImage(imageUrl);
-    
-    // Smooth scroll to top to see the image
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
   } catch (error) {
-    console.error("Image Error:", error);
-    alert("The image engine is warming up. Please try again in 10 seconds.");
+    console.error("Dashboard Image Error:", error);
+    const serverError = error.response?.data?.error || "Connection error";
+    alert(`Error: ${serverError}`);
   } finally {
     setIsGenerating(false);
   }
