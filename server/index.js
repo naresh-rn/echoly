@@ -454,30 +454,45 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
-    const { prompt, platform } = req.body; // We added platform here
+    const { prompt, platform } = req.body;
     const hfKey = process.env.HUGGINGFACE_API_KEY;
 
-    // 1. AESTHETIC PRESET LOGIC (From your Reference)
-    let stylePreset = "Cinematic photography, high-end commercial style, 8k resolution, sharp focus";
+    // --- STEP 1: THE INTELLIGENCE LAYER (Summarize the content into a SUBJECT) ---
+    // We use Groq to find out what the image should actually be about.
+    const brainResponse = await groq.chat.completions.create({
+      messages: [
+        { 
+          role: "system", 
+          content: "Summarize the core technical subject of this text into 3 words. (e.g., 'React JS Development', 'Financial Growth', 'Coffee Roasting')." 
+        },
+        { role: "user", content: prompt.substring(0, 500) }
+      ],
+      model: "llama-3.1-8b-instant",
+    });
+
+    const coreSubject = brainResponse.choices[0].message.content.replace(/["'.]/g, '');
+    console.log("🎯 Extracted Subject:", coreSubject);
+
+    // --- STEP 2: APPLY THE STYLE PRESET ---
+    let stylePreset = "Cinematic photography, high-end commercial style, 8k, sharp focus";
     
     if (platform === 'linkedin' || platform === 'newsletter') {
-      stylePreset = "Professional 3D isometric illustration, minimalist tech aesthetic, Apple-style product photography, soft studio lighting";
-    } else if (platform === 'twitter' || platform === 'x' || platform === 'tiktok') {
-      stylePreset = "Cinematic futuristic scene, dark background with vibrant neon light leaks, octane render, dynamic composition";
-    } else if (platform === 'instagram') {
-      stylePreset = "Minimalist photography, natural soft sunlight, muted earthy tones, Leica photography style, peaceful atmosphere";
+      stylePreset = "Modern minimalist office, professional software developer workspace, clean desk, Apple-style lighting, coding on monitor";
+    } else if (platform === 'twitter' || platform === 'x') {
+      stylePreset = "Digital futuristic coding aesthetic, glowing atom symbols, vibrant blue neon light leaks, dark high-tech background, masterpiece";
+    } else {
+      stylePreset = "Professional technology stock photography, bright airy office, depth of field, sharp details";
     }
 
-    // 2. FORMULATING THE COMMAND (The "Secret Sauce")
-    const visualDirective = `
-      WIDE ANGLE 16:9 ASPECT RATIO.
-      ${stylePreset}. 
-      Core Subject: ${prompt.substring(0, 300)}. 
-      Technical: Masterpiece, highly detailed, photorealistic, depth of field, no text, no distorted faces.
+    // --- STEP 3: CONSTRUCT THE FINAL DIRECTIVE ---
+    const finalVisualDirective = `
+      WIDE ANGLE 16:9. 
+      Subject: ${coreSubject}. 
+      Style: ${stylePreset}. 
+      Details: No text, no spelling errors, photorealistic, 8k resolution, professional composition.
     `.trim();
 
-    console.log("🎨 Executing Visual Directive for:", platform);
-
+    // --- STEP 4: CALL HUGGING FACE ---
     const response = await axios({
       url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
       method: "POST",
@@ -486,11 +501,7 @@ app.post('/api/generate-image', auth, async (req, res) => {
         "Content-Type": "application/json",
         Accept: "image/png",
       },
-      data: JSON.stringify({ 
-        inputs: visualDirective,
-        // Some models support parameters; others rely on the prompt description
-        parameters: { width: 1024, height: 576 } 
-      }),
+      data: JSON.stringify({ inputs: finalVisualDirective }),
       responseType: 'arraybuffer',
     });
 
@@ -498,8 +509,8 @@ app.post('/api/generate-image', auth, async (req, res) => {
     res.json({ imageData: base64Image, mimeType: "image/png" });
 
   } catch (error) {
-    console.error("HF Error:", error.message);
-    res.status(500).json({ error: "Generation failed" });
+    console.error("Image Error:", error.message);
+    res.status(500).json({ error: "Failed to generate accurate image" });
   }
 });
 
