@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
   Copy, Check, Edit3, X, Maximize2, Trash2, Share2, 
-  RefreshCw, Image as ImageIcon, MoreVertical, Wand2,
+  RefreshCw, Image as ImageIcon, MoreVertical, 
 } from 'lucide-react';
 
-const API_BASE =
-  (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
+const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
 
 export default function ResultCard({
   platform,
@@ -14,8 +13,9 @@ export default function ResultCard({
   projectId,
   fetchHistory,
   onRegenerate, 
-  onGenerateImage, 
-  onShare
+  onGenerateImage, // Triggered from Dashboard
+  onShare,
+  isGenerating // Loading state passed from Dashboard
 }) {
 
   // ---------------- STATE ----------------
@@ -23,14 +23,12 @@ export default function ResultCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
   const [copied, setCopied] = useState(false);
-  const [realImage, setRealImage] = useState(null);
-  const [imageLoading, setImageLoading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => setEditedContent(content), [content]);
 
-  // ---------------- PLATFORM STYLE ----------------
+  // ---------------- PLATFORM STYLE LOGIC ----------------
   const getPlatformIdentity = (p) => {
     const str = p.toLowerCase();
     if (str.includes("linkedin"))
@@ -53,17 +51,6 @@ export default function ResultCard({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShare = () => {
-    if (onShare) {
-      onShare(); // Use the logic passed from Dashboard
-    } else if (navigator.share) {
-      navigator.share({ title: `Echoly ${platform}`, text: editedContent });
-    } else {
-      handleCopy();
-      alert("Link copied to clipboard!");
-    }
-  };
-
   const handleDelete = async () => {
     if (!window.confirm(`Delete this ${platform} draft permanently?`)) return;
     setIsDeleting(true);
@@ -74,39 +61,9 @@ export default function ResultCard({
         { headers: { "x-auth-token": token } }
       );
       fetchHistory && fetchHistory();
-    } catch {
+    } catch (error) {
       alert("Delete failed.");
       setIsDeleting(false);
-    }
-  };
-
-  const generateImage = async () => {
-    setImageLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.post(
-        `${API_BASE}/generate-image-prompt`,
-        { platform, content: editedContent.substring(0, 500) },
-        { headers: { "x-auth-token": token } }
-      );
-
-      // Clean the prompt of markdown symbols before encoding
-      const cleanPrompt = res.data.prompt
-        .replace(/\*\*/g, '')
-        .replace(/#/g, '')
-        .replace(/"/g, '')
-        .trim();
-
-      const encodedPrompt = encodeURIComponent(cleanPrompt);
-      const imageUrl = `https://pollinations.ai/p/${encodedPrompt}?width=1024&height=1024&seed=${Math.floor(Math.random()*100000)}&model=flux&nologo=true`;
-
-      setRealImage(imageUrl);
-      // Optional: Update dashboard global state if needed
-      if(onGenerateImage) onGenerateImage(imageUrl); 
-    } catch {
-      alert("Visualization failed.");
-    } finally {
-      setImageLoading(false);
     }
   };
 
@@ -125,9 +82,8 @@ export default function ResultCard({
         </div>
 
         <div className="flex items-center gap-1">
-          {/* SHARE BUTTON ADDED HERE */}
           <button
-            onClick={handleShare}
+            onClick={onShare}
             className="p-2.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-colors"
             title="Share"
           >
@@ -180,73 +136,65 @@ export default function ResultCard({
         </div>
       </div>
 
-      {/* CONTENT */}
+      {/* CONTENT AREA */}
       <div className="px-9 pb-8">
         {isEditing ? (
-          <textarea
-            className="w-full min-h-[220px] bg-gray-50 rounded-3xl p-6 text-[15px] resize-none focus:ring-2 focus:ring-indigo-100 outline-none border-none"
-            value={editedContent}
-            onChange={(e)=>setEditedContent(e.target.value)}
-          />
+          <div className="space-y-4">
+            <textarea
+              className="w-full min-h-[220px] bg-gray-50 rounded-3xl p-6 text-[15px] resize-none focus:ring-2 focus:ring-indigo-100 outline-none border-none transition-all"
+              value={editedContent}
+              onChange={(e)=>setEditedContent(e.target.value)}
+            />
+            <button 
+              onClick={() => setIsEditing(false)}
+              className="bg-black text-white px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors"
+            >
+              Save Changes
+            </button>
+          </div>
         ) : (
           <p className="text-[17px] leading-[1.7] text-gray-700 whitespace-pre-wrap">
             {editedContent}
           </p>
         )}
-        
-        {/* SAVE BUTTON FOR EDITING */}
-        {isEditing && (
-          <button 
-            onClick={() => setIsEditing(false)}
-            className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-xl text-xs font-bold"
-          >
-            SAVE CHANGES
-          </button>
-        )}
-
-        {(realImage || imageLoading) && (
-          <div className="mt-8 rounded-[2rem] overflow-hidden border bg-gray-50 aspect-video relative">
-            {imageLoading ? (
-              <div className="flex flex-col items-center justify-center h-full gap-3">
-                <Wand2 className="animate-spin text-indigo-500" size={32}/>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Generating Visual...</span>
-              </div>
-            ) : (
-              <img src={realImage} className="w-full h-full object-cover animate-in fade-in duration-700" alt="AI visual"/>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* FOOTER */}
+      {/* FOOTER ACTIONS */}
       <div className="px-8 py-5 bg-gray-50/40 border-t flex justify-between items-center">
         <button
           onClick={handleCopy}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[11px] font-bold transition-all ${
-            copied ? "bg-green-500 text-white shadow-lg shadow-green-100" : "bg-white border hover:border-gray-300"
+            copied ? "bg-green-500 text-white shadow-lg shadow-green-100" : "bg-white border border-gray-200 hover:border-gray-300"
           }`}
         >
           {copied ? <Check size={14}/> : <Copy size={14}/>}
-          {copied ? "COPIED" : "COPY TEXT"}
+          <span className="leading-none">{copied ? "COPIED" : "COPY TEXT"}</span>
         </button>
 
-        {!realImage && (
-          <button
-            onClick={generateImage}
-            disabled={imageLoading}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-black text-white text-[11px] font-bold hover:bg-zinc-800 transition-all active:scale-95 disabled:opacity-50"
-          >
-            <ImageIcon size={14}/>
-            {imageLoading ? "PROCESSING..." : "VISUALIZE"}
-          </button>
-        )}
-
-        <span className="text-[10px] font-black text-gray-300">
-          {editedContent.length} CHARS
-        </span>
+        {/* IMAGE GENERATION BUTTON */}
+        <button 
+          onClick={() => onGenerateImage(editedContent)}
+          disabled={isGenerating} 
+          className={`ml-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[11px] font-bold uppercase transition-all 
+            ${isGenerating 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+              : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white shadow-sm'}`}
+        >
+          {isGenerating ? (
+            <>
+              <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+              <span>Warming...</span>
+            </>
+          ) : (
+            <>
+              <ImageIcon size={14} /> 
+              <span className="leading-none">Create Visual</span>
+            </>
+          )}
+        </button>
       </div>
 
-      {/* EXPANDED MODAL */}
+      {/* FULLSCREEN EXPANDED MODAL */}
       {isExpanded && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-white/90 backdrop-blur-xl animate-in fade-in duration-300">
           <div className="bg-white rounded-[3rem] shadow-2xl border border-gray-100 max-w-5xl w-full p-12 overflow-y-auto max-h-[90vh] relative">
@@ -260,9 +208,6 @@ export default function ResultCard({
               <p className="text-3xl leading-[1.5] text-gray-800 whitespace-pre-wrap font-medium">
                 {editedContent}
               </p>
-              {realImage && (
-                <img src={realImage} className="mt-10 rounded-3xl w-full shadow-2xl border border-gray-100" alt="Expanded AI visual"/>
-              )}
             </div>
           </div>
         </div>

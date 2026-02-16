@@ -387,26 +387,38 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 });
 
 
-app.post('/api/generate-image', auth, async (req, res) => {
+// server/index.js
+app.post('/api/generate-image', async (req, res) => {
   try {
     const { prompt } = req.body;
 
     const response = await axios({
-      url: "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5",
+      url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`, // Optional but recommended
+        Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
         "Content-Type": "application/json",
       },
       data: JSON.stringify({ inputs: prompt }),
-      responseType: 'arraybuffer', // Crucial for receiving image data
+      responseType: 'arraybuffer',
     });
 
-    const base64Image = Buffer.from(response.data, 'binary').toString('base64');
-    res.json({ imageData: base64Image, mimeType: "image/png" });
+    // Convert the binary data to a base64 string safely
+    const base64Image = Buffer.from(response.data).toString('base64');
+    
+    res.json({ 
+      imageData: base64Image, 
+      mimeType: "image/png" 
+    });
+
   } catch (error) {
-    console.error("Hugging Face Error:", error.message);
-    res.status(500).send("Image generation failed");
+    // If Hugging Face is still warming up (503 error), send a specific message
+    if (error.response?.status === 503) {
+      return res.status(503).json({ error: "Image engine is waking up. Try again in 5 seconds." });
+    }
+    
+    console.error("HF Error:", error.message);
+    res.status(500).json({ error: "Failed to generate image." });
   }
 });
 

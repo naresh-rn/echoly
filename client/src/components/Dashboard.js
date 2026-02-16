@@ -358,6 +358,8 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
                 {/* TWO COLUMN GRID FOR RESULTS */}
                 {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
                   <div className="columns-1 md:columns-2 gap-6 space-y-6">
+                      // ... (Inside Dashboard return, locate the ResultCard mapping)
+
                       {Object.entries(bundle || {}).map(([platform, content]) => (
                         <ResultCard 
                             key={platform}
@@ -365,8 +367,9 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
                             content={content} 
                             projectId={currentProjectId}
                             fetchHistory={fetchHistory}
+                            isGenerating={isGenerating} // PASS THIS PROP
                             onRegenerate={() => handleSingleRegenerate(platform)} 
-                            onGenerateImage={() => handleGenerateImage(content)} 
+                            onGenerateImage={(text) => handleGenerateImage(text)} // PASS THE TEXT
                             onShare={() => {
                               if (navigator.share) {
                                 navigator.share({ title: `Echoly ${platform}`, text: content });
