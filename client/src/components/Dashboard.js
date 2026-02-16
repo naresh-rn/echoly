@@ -65,72 +65,72 @@ const fetchHistory = useCallback(async () => {
   }, [cooldown, fetchHistory]);
 
   // Actions
-  const handleRepurpose = async (type, content, tone) => {
-      setIsGenerating(true);
-      setBundle({});
-      setProgress(0);
-      setStatusText("Initializing Engine...");
+// Dashboard.js -> handleRepurpose
 
-      const formData = new FormData();
-      if (type === 'file') formData.append('file', content);
-      else formData.append('content', content);
-      formData.append('type', type);
-      formData.append('tone', tone);
+const handleRepurpose = async (type, content, tone) => {
+    setIsGenerating(true);
+    setBundle({});
+    setProgress(0);
+    setStatusText("Initializing Engine...");
 
-      try {
-          const response = await fetch(`${API_BASE}/repurpose-all`, {
-              method: 'POST',
-              body: formData,
-              headers: { 'x-auth-token': localStorage.getItem('token') }
-          });
+    const formData = new FormData();
+    if (type === 'file') formData.append('file', content);
+    else formData.append('content', content);
+    formData.append('type', type);
+    formData.append('tone', tone);
 
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
+    try {
+        const response = await fetch(`${API_BASE}/repurpose-all`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'x-auth-token': localStorage.getItem('token') }
+        });
 
-          while (true) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = ""; // THIS IS THE FIX: A buffer for partial chunks
+
+        while (true) {
             const { value, done } = await reader.read();
             if (done) break;
 
-            const lines = decoder.decode(value).split('\n\n');
-            lines.forEach(line => {
-          // Only process lines that actually start with "data: "
-          if (line.trim().startsWith('data: ')) {
-              try {
-                  const jsonString = line.replace('data: ', '').trim();
-                  
-                  // Skip if the string is empty
-                  if (!jsonString) return;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            
+            // Keep the last (potentially incomplete) part in the buffer
+            buffer = lines.pop(); 
 
-                  const data = JSON.parse(jsonString);
-                  
-                  // Process your data as usual
-                  if (data.progress) setProgress(data.progress);
-                  if (data.status) setStatusText(data.status);
-                  if (data.partialResult) {
-                      setBundle(prev => ({
-                          ...prev,
-                          [data.partialResult.platform]: data.partialResult.content
-                      }));
-                  }
-                  if (data.projectId) {
-                      setCurrentProjectId(data.projectId);
-                      fetchHistory();
-                  }
-              } catch (e) {
-                  // Silently fail for incomplete chunks; the next full chunk will fix it
-                  console.warn("Received partial JSON chunk, waiting for full data...");
-              }
-          }
-      });
+            for (const line of lines) {
+                if (line.trim().startsWith('data: ')) {
+                    try {
+                        const jsonString = line.replace('data: ', '').trim();
+                        const data = JSON.parse(jsonString);
+                        
+                        if (data.progress) setProgress(data.progress);
+                        if (data.status) setStatusText(data.status);
+                        if (data.partialResult) {
+                            setBundle(prev => ({
+                                ...prev,
+                                [data.partialResult.platform]: data.partialResult.content
+                            }));
+                        }
+                        if (data.projectId) {
+                            setCurrentProjectId(data.projectId);
+                        }
+                    } catch (e) {
+                        console.log("Waiting for next chunk...");
+                    }
+                }
+            }
         }
-      } catch (e) {
-          setStatusText("Mission Failed");
-          alert(e.message);
-      } finally {
-          setTimeout(() => setIsGenerating(false), 2000);
-          fetchHistory();
-      }
-  };
+    } catch (e) {
+        setStatusText("Mission Failed");
+        alert("Streaming error: " + e.message);
+    } finally {
+        setTimeout(() => setIsGenerating(false), 1000);
+        fetchHistory();
+    }
+};
 
   const handleSingleRegenerate = async (platform) => {
     if (!rawText) return alert("Source text missing.");

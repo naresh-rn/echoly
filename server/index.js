@@ -447,9 +447,21 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 });
 
 // --- MAIN IMAGE GENERATOR ---
+// server/index.js
+
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    // 1. Check if Key exists
+    if (!process.env.HUGGINGFACE_API_KEY) {
+      console.error("❌ MISSING HUGGINGFACE_API_KEY in .env");
+      return res.status(500).json({ error: "Server configuration error: Missing API Key" });
+    }
+
+    console.log("🎨 Generating image for prompt:", prompt.substring(0, 50).concat("..."));
+
+    // 2. Call Hugging Face
     const response = await axios({
       url: "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
       method: "POST",
@@ -457,17 +469,27 @@ app.post('/api/generate-image', auth, async (req, res) => {
         Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
         "Content-Type": "application/json",
       },
-      data: JSON.stringify({ inputs: prompt }),
+      // Ensure prompt is a clean string and under 400 chars
+      data: JSON.stringify({ inputs: String(prompt).substring(0, 400) }),
       responseType: 'arraybuffer',
+      timeout: 30000, // 30 second timeout
     });
 
     const base64Image = Buffer.from(response.data).toString('base64');
-    res.json({ imageData: base64Image, mimeType: "image/png" });
+    
+    res.json({ 
+      imageData: base64Image, 
+      mimeType: "image/png" 
+    });
+
   } catch (error) {
+    console.error("❌ Hugging Face Detail:", error.response?.data?.toString() || error.message);
+    
     if (error.response?.status === 503) {
-      return res.status(503).json({ error: "Engine warming up. Try again in 5 seconds." });
+      return res.status(503).json({ error: "Model is loading. Try again in 10s." });
     }
-    res.status(500).json({ error: "Image generation failed." });
+    
+    res.status(500).json({ error: "AI Engine failed to respond. Check backend logs." });
   }
 });
 
