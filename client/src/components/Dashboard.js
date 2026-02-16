@@ -208,9 +208,12 @@ const handleGenerateImage = async (content, platformName) => { // Added platform
     setGeneratedImage(imageUrl);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  } catch (error) {
-    alert("Engine is processing high-quality weights. Try again in 5s.");
-  } finally {
+  // Inside handleGenerateImage in Dashboard.js
+    } catch (error) {
+        console.error("Dashboard Image Error:", error);
+        // Updated alert for Pollinations
+        alert("The visual engine is busy creating your asset. Please try again in a few seconds.");
+    } finally {
     setIsGenerating(false);
   }
 };
