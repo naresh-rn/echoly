@@ -12,7 +12,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Readable } = require('stream');
 const cloudinary = require('cloudinary').v2;
+const { GoogleGenerativeAI } = require("@google/generative-ai"); //
 require('dotenv').config();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // --- MODELS ---
 const User = require('./models/User');
@@ -384,7 +386,33 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
     }
 });
 
-// ... (Rest of your history and delete routes remain the same)
+
+app.post('/api/generate-gemini-image', auth, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: `Generate a high-quality visual for: ${prompt}` }] }],
+      generationConfig: { responseModalities: ["IMAGE"] }, // Requirement from @google/genai
+    });
+
+    const response = await result.response;
+    const imagePart = response.candidates[0].content.parts.find(p => p.inlineData);
+
+    if (imagePart) {
+      res.json({ 
+        imageData: imagePart.inlineData.data, 
+        mimeType: imagePart.inlineData.mimeType 
+      });
+    } else {
+      res.status(400).send("No image data returned from Gemini.");
+    }
+  } catch (error) {
+    console.error("Backend Error:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 app.get('/api/history', auth, async (req, res) => {
     try {
@@ -430,26 +458,22 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
       messages: [
         { 
           role: "system", 
-          content: "You are a professional prompt engineer. Generate a highly detailed, realistic image description based on the text provided. IMPORTANT: Output ONLY the prompt text. No markdown, no quotes, no 'Here is your prompt'." 
+          content: "You are a professional prompt engineer. Return ONLY a 20-word visual description. DO NOT use quotes, DO NOT use bolding, DO NOT say 'Here is your prompt'. Just raw text." 
         },
-        { role: "user", content: content }
+        { role: "user", content: `Context: ${content}` }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    // Clean the prompt to ensure no special characters break the next request
-    const cleanPrompt = response.choices[0].message.content
-      .replace(/\*\*/g, '')
-      .replace(/#/g, '')
-      .replace(/"/g, '')
-      .trim();
+    // Final safety scrub before sending to frontend
+    let prompt = response.choices[0].message.content;
+    prompt = prompt.replace(/["'**#]/g, '').replace(/\n/g, ' ').trim();
 
-    res.json({ prompt: cleanPrompt });
+    res.json({ prompt: prompt });
   } catch (error) {
-    res.status(500).json({ error: "Failed to generate prompt" });
+    res.status(500).json({ error: "Failed to create prompt" });
   }
 });
-
 
 app.delete('/api/history', auth, async (req, res) => {
     try {

@@ -188,25 +188,24 @@ const fetchHistory = useCallback(async () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleGenerateImage = async (platformContent) => {
+const handleGenerateImage = async (platformContent) => {
   try {
-    // 1. Get the prompt from your backend
-    const promptRes = await axios.post(`${API_BASE}/generate-image-prompt`, 
-      { content: platformContent },
-      { headers: { 'x-auth-token': localStorage.getItem('token') } }
+    setIsGenerating(true);
+    const token = localStorage.getItem('token');
+
+    const res = await axios.post(`${API_BASE}/generate-gemini-image`, 
+      { prompt: platformContent.substring(0, 300) },
+      { headers: { 'x-auth-token': token } }
     );
 
-    const prompt = promptRes.data.prompt;
-
-    // 2. Generate the actual image URL
-    // Using Pollinations (Free/No Key) as an example:
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
-
-    // 3. Update state
-    setGeneratedImage(imageUrl);
+    // Construct valid Data URI
+    const base64Image = `data:${res.data.mimeType};base64,${res.data.imageData}`;
+    setGeneratedImage(base64Image);
   } catch (error) {
     console.error("Image Gen Error:", error);
-    alert("Could not generate image. Check console for details.");
+    alert("Check if your Backend is deployed with the /api/generate-gemini-image route.");
+  } finally {
+    setIsGenerating(false);
   }
 };
 
@@ -218,20 +217,22 @@ const fetchHistory = useCallback(async () => {
 
   // Helper component for Sidebar Links
   const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
-    const isActive = exact ? location.pathname === to : location.pathname.includes(to);
-    return (
-      <Link 
-        to={to} 
-        onClick={() => setIsMobileMenuOpen(false)}
-        /* Removed shadow-lg and shadow-black/10 from the template literal below */
-        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-body text-sm font-medium mb-1 ${isActive ? 'bg-black text-white' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}
-      >
-        <Icon size={18} />
-        {/* Added leading-none to remove extra vertical space/padding from text */}
-        <span className="leading-none pt-1">{label}</span>
-      </Link>
-    );
-  };
+  const isActive = exact ? location.pathname === to : location.pathname.includes(to);
+  return (
+    <Link 
+      to={to} 
+      onClick={() => setIsMobileMenuOpen(false)}
+      // REMOVED shadow-lg shadow-black/10 and py-3.5 changed to py-3
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-body text-sm font-medium mb-1 ${
+        isActive ? 'bg-black text-white' : 'text-gray-500 hover:text-black hover:bg-gray-100'
+      }`}
+    >
+      <Icon size={18} />
+      {/* Added leading-none and flex to fix vertical centering */}
+      <span className="leading-none flex items-center">{label}</span>
+    </Link>
+  );
+};
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-body text-slate-900 overflow-hidden">
@@ -368,8 +369,15 @@ const fetchHistory = useCallback(async () => {
                             projectId={currentProjectId}
                             fetchHistory={fetchHistory}
                             onRegenerate={() => handleSingleRegenerate(platform)} 
-                            // Don't forget to pass handleGenerateImage to the ResultCard!
                             onGenerateImage={() => handleGenerateImage(content)} 
+                            onShare={() => {
+                              if (navigator.share) {
+                                navigator.share({ title: `Echoly ${platform}`, text: content });
+                              } else {
+                                navigator.clipboard.writeText(content);
+                                alert("Copied to clipboard!");
+                              }
+                            }}
                         />
                       ))}
                   </div>
