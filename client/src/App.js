@@ -39,8 +39,27 @@ export default function App() {
   }, []);
 
   if (loading) return (
-    <div className="bg-[#0c0c0e] h-screen flex items-center justify-center font-heading text-zinc-100">
-      <div className="animate-pulse tracking-widest text-xs uppercase">Initialising_System_Protocols...</div>
+    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-[9999]">
+      {/* Application Name */}
+      <h1 className="font-heading text-8xl text-white mb-6 tracking-tighter animate-in fade-in zoom-in duration-1000">
+        ECHOLY
+      </h1>
+
+      {/* Loading Text */}
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-[1px] bg-white/20 relative overflow-hidden">
+           <div className="absolute inset-0 bg-white animate-[shimmer_2s_infinite]" />
+        </div>
+        
+        <span className="text-[10px] text-white/40 font-bold uppercase tracking-[0.5em] animate-pulse">
+          INITIALISING_SYSTEM_PROTOCOLS...
+        </span>
+      </div>
+
+      {/* Subtle background decoration */}
+      <div className="absolute inset-0 pointer-events-none opacity-20">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full" />
+      </div>
     </div>
   );
 
