@@ -38,14 +38,31 @@ export default function App() {
     checkAuth();
   }, []);
 
+  // --- HIGH-END LOADING SCREEN ---
   if (loading) return (
     <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-[9999]">
-      {/* Application Name */}
-      <h1 className="font-heading text-8xl text-white mb-6 tracking-tighter animate-in fade-in zoom-in duration-1000">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Anek+Odia:wght@100..800&family=Space+Grotesk:wght@300..700&display=swap');
+        
+        /* Fallback to Space Grotesk if Stack Sans Notch is not hosted locally */
+        .font-heading { 
+          font-family: 'Stack Sans Notch', 'Space Grotesk', sans-serif; 
+          letter-spacing: -0.05em;
+          text-transform: uppercase;
+        }
+
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
+
+      {/* Application Name: 8XL Branding */}
+      <h1 className="font-heading text-7xl md:text-8xl text-white mb-6 tracking-tighter animate-in fade-in zoom-in duration-1000">
         ECHOLY
       </h1>
 
-      {/* Loading Text */}
+      {/* Technical Protocol Subtext */}
       <div className="flex flex-col items-center gap-4">
         <div className="w-12 h-[1px] bg-white/20 relative overflow-hidden">
            <div className="absolute inset-0 bg-white animate-[shimmer_2s_infinite]" />
@@ -56,7 +73,7 @@ export default function App() {
         </span>
       </div>
 
-      {/* Subtle background decoration */}
+      {/* Subtle background glow decoration */}
       <div className="absolute inset-0 pointer-events-none opacity-20">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full" />
       </div>
@@ -69,17 +86,17 @@ export default function App() {
         {/* LANDING: Only for non-logged users */}
         <Route path="/" element={user ? <Navigate to="/dashboard" /> : <LandingPage />} />
         
-        {/* AUTH: Passing setUser prop correctly now */}
+        {/* AUTH ROUTES */}
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <LoginPage setUser={setUser} />} />
         <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <SignUpPage setUser={setUser} />} />
 
-        {/* PROTECTED: Dashboard requires user state */}
+        {/* PROTECTED: Dashboard Route with Wildcard (*) to allow sub-pages like /pulse and /vault */}
         <Route 
           path="/dashboard/*" 
           element={user ? <Dashboard user={user} setUser={setUser} /> : <Navigate to="/" />} 
         />
 
-        {/* REDIRECT: Catch all */}
+        {/* CATCH ALL: Redirect to root */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
