@@ -188,9 +188,6 @@ const handleRepurpose = async (type, content, tone) => {
     URL.revokeObjectURL(url);
   };
 
-// Inside Dashboard.js
-// Dashboard.js
-
 const handleGenerateImage = async (content) => {
   if (!content) return;
   
