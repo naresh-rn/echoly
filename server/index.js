@@ -452,22 +452,18 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt, platform } = req.body;
-    const puterKey = process.env.PUTER_API_KEY;
-
-    if (!puterKey) {
-      return res.status(500).json({ error: "Puter API Key is missing." });
-    }
-
-    // --- STEP 1: THE VISUAL BRAIN (Groq) ---
-    // This ensures the image is relevant to your content (React, etc.)
+    
+    // 1. THE VISUAL BRAIN (Groq)
+    // We force Groq to create a METAPHOR so the image is 100% relevant
     const brainResponse = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
           content: `You are the Visual Director for EchoThread. 
-          Translate the user's content into a professional CONCEPTUAL VISUAL METAPHOR.
-          Style: High-end 3D tech render, cinematic, 16:9 aspect ratio.
-          Constraint: NO HUMANS, NO TEXT, NO FACES.` 
+          Convert technical text into a PROFESSIONAL CONCEPTUAL METAPHOR.
+          - Topic: ${prompt.substring(0, 100)}
+          - Style: High-end 3D render, minimalist, 16:9 cinematic.
+          - Mandatory: NO HUMANS, NO TEXT, NO FACES.` 
         },
         { role: "user", content: prompt.substring(0, 400) }
       ],
@@ -475,34 +471,35 @@ app.post('/api/generate-image', auth, async (req, res) => {
     });
 
     const visualMetaphor = brainResponse.choices[0].message.content.replace(/["'#]/g, '');
-    console.log("🎯 Puter Subject:", visualMetaphor);
 
-    // --- STEP 2: CALL PUTER.AI ---
-    // We use the txt2img endpoint. Puter is very fast and high-quality.
-    const response = await axios({
-      url: "https://api.puter.com/v1/ai/txt2img",
+    // 2. CLOUDFLARE WORKERS AI CALL
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+    const cfResponse = await axios({
+      url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${puterKey.trim()}`,
+        Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
       data: {
-        prompt: `${visualMetaphor}, professional digital art, 8k, cinematic lighting, 16:9 wide angle, unreal engine 5 style, masterpiece`,
-        width: 1024,
-        height: 576, // This forces the 16:9 ratio
+        prompt: `${visualMetaphor}, photorealistic, masterpiece, 8k, cinematic lighting, wide angle, high-end tech aesthetic, unreal engine 5 render`,
+        num_steps: 20, // High quality
       },
       responseType: 'arraybuffer',
     });
 
-    const base64Image = Buffer.from(response.data).toString('base64');
+    // 3. CONVERT AND SEND
+    const base64Image = Buffer.from(cfResponse.data).toString('base64');
     res.json({ 
       imageData: base64Image, 
       mimeType: "image/png" 
     });
-
+  
   } catch (error) {
-    console.error("Puter Engine Error:", error.message);
-    res.status(500).json({ error: "Puter AI failed to generate the asset." });
+    console.error("Cloudflare Error:", error.message);
+    res.status(500).json({ error: "Cloudflare AI failed to generate image." });
   }
 });
 

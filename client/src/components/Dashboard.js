@@ -189,23 +189,35 @@ const handleRepurpose = async (type, content, tone) => {
   };
 
 // Inside Dashboard.js
+// Dashboard.js
+
 const handleGenerateImage = async (content, platformName) => {
   if (!content) return;
+  
   try {
     setIsGenerating(true);
     const token = localStorage.getItem('token');
-    
-    // Call the new Puter-powered backend
+
+    // Remove old state to show fresh loading
+    setGeneratedImage(null);
+
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: content, platform: platformName }, 
+      { 
+        prompt: content, 
+        platform: platformName 
+      }, 
       { headers: { 'x-auth-token': token } }
     );
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
     setGeneratedImage(imageUrl);
+    
+    // Smooth scroll to the top preview
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
   } catch (error) {
-    alert("Puter AI is busy. Please try again in a few seconds.");
+    console.error("Image Error:", error);
+    alert("The AI Engine is busy. Please try again in 10 seconds.");
   } finally {
     setIsGenerating(false);
   }
@@ -328,45 +340,53 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 
                 {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
 
-                // Inside Dashboard.js - Update your preview section
+                {generatedImage && (
+                  <div className="max-w-6xl mx-auto mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-2xl overflow-hidden">
+                      
+                      {/* Visual Header */}
+                      <div className="px-8 py-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          EchoThread Visual Engine (Powered by Puter)
+                        </span>
+                          <button 
+                            onClick={() => onGenerateImage(editedContent)} 
+                            disabled={isGenerating}
+                            className={`ml-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-bold uppercase transition-all 
+                              ${isGenerating ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'}`}
+                          >
+                            {isGenerating ? (
+                              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <ImageIcon size={14} />
+                            )}
+                            <span>{isGenerating ? "Drawing..." : "Create Visual"}</span>
+                          </button>
+                      </div>
 
-{generatedImage && (
-  <div className="max-w-6xl mx-auto mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-2xl overflow-hidden">
-      
-      {/* Visual Header */}
-      <div className="px-8 py-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          EchoThread Visual Engine (Powered by Puter)
-        </span>
-        <button onClick={() => setGeneratedImage(null)} className="text-gray-400 hover:text-red-500">
-          <X size={18} />
-        </button>
-      </div>
+                      {/* 16:9 Aspect Ratio Container */}
+                      <div className="aspect-video w-full bg-slate-900 overflow-hidden group">
+                        <img 
+                          src={generatedImage} 
+                          alt="Puter AI Visual" 
+                          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                        />
+                      </div>
 
-      {/* 16:9 Aspect Ratio Container */}
-      <div className="aspect-video w-full bg-slate-900 overflow-hidden group">
-        <img 
-          src={generatedImage} 
-          alt="Puter AI Visual" 
-          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="p-6 flex justify-between items-center bg-white">
-        <div className="text-[10px] font-bold text-slate-300">1024 x 576 • 4K UPSCALE</div>
-        <a 
-          href={generatedImage} 
-          download="asset-visual.png"
-          className="bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-black/10 hover:bg-zinc-800 transition-all"
-        >
-          Export High-Res Asset
-        </a>
-      </div>
-    </div>
-  </div>
-)}
+                      {/* Actions */}
+                      <div className="p-6 flex justify-between items-center bg-white">
+                        <div className="text-[10px] font-bold text-slate-300">1024 x 576 • 4K UPSCALE</div>
+                        <a 
+                          href={generatedImage} 
+                          download="asset-visual.png"
+                          className="bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-black/10 hover:bg-zinc-800 transition-all"
+                        >
+                          Export High-Res Asset
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* TWO COLUMN GRID FOR RESULTS */}
                 {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
