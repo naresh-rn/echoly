@@ -188,28 +188,38 @@ const handleRepurpose = async (type, content, tone) => {
     URL.revokeObjectURL(url);
   };
 
-const handleGenerateImage = async (content) => {
-  if (!content) return;
+// Inside Dashboard.js 
+
+// Dashboard.js
+
+const handleGenerateImage = async (cardContent) => {
+  if (!cardContent) return;
   
   try {
-      setIsGenerating(true);
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`${API_BASE}/generate-image`, 
-        { prompt: content }, 
-        { headers: { 'x-auth-token': token } }
-      );
+    setIsGenerating(true);
+    setGeneratedImage(null); // Reset for new visual
 
-      const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
-      setGeneratedImage(imageUrl);
+    const token = localStorage.getItem('token');
+    
+    // We send the 'content' which could be a transcript or blog body
+    const res = await axios.post(`${API_BASE}/generate-image`, 
+      { prompt: cardContent }, 
+      { headers: { 'x-auth-token': token } }
+    );
+
+    const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
+    setGeneratedImage(imageUrl);
+    
+    // Smooth scroll to the top preview box
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
   } catch (error) {
-      // This is where your alert is coming from
-      const msg = error.response?.data?.error || "Image engine failure";
-      alert(msg);
+    console.error("Echoly Image Error:", error);
+    alert("The engine is analyzing your content essence. Please try again in 5 seconds.");
   } finally {
-      setIsGenerating(false);
+    setIsGenerating(false);
   }
 };
-
   const handleLogout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -326,54 +336,57 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 
                 {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
 
-                {/* In your Dashboard.js JSX return */}
-                {generatedImage && (
-                  <div className="max-w-6xl mx-auto mb-10 animate-in fade-in zoom-in duration-500">
-                    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
-                      
-                      {/* 16:9 Ratio forced via aspect-video */}
-                      <div className="aspect-video w-full bg-slate-900 overflow-hidden relative group">
-                        <img 
-                          src={generatedImage} 
-                          alt="Technical Visual" 
-                          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                      </div>
+                {/* Dashboard.js - Put this above your results grid */}
+{generatedImage && (
+  <div className="max-w-6xl mx-auto mb-10 animate-in fade-in zoom-in duration-500">
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
+      
+      {/* 16:9 Aspect Ratio Container */}
+      <div className="aspect-video w-full bg-slate-900 overflow-hidden relative group">
+        <img 
+          src={generatedImage} 
+          alt="Branded Visual" 
+          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+      </div>
 
-                      <div className="p-6 flex justify-between items-center bg-white border-t">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Asset Format</span>
-                          <span className="text-xs font-bold text-slate-900">16:9 Cinematic High-Res</span>
-                        </div>
-                        <a 
-                          href={generatedImage} 
-                          download="Echoly_Technical_Asset.png"
-                          className="bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-black/10 hover:bg-zinc-800 transition-all"
-                        >
-                          Export 4K Asset
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                )}
+      <div className="p-6 flex justify-between items-center bg-white border-t">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Branded Visual Asset</span>
+          <span className="text-xs font-bold text-slate-900">16:9 High-Res • Ready for Export</span>
+        </div>
+        <div className="flex gap-3">
+           <button onClick={() => setGeneratedImage(null)} className="px-5 py-3 rounded-2xl border text-xs font-bold hover:bg-gray-50">Clear</button>
+           <a 
+            href={generatedImage} 
+            download="Echoly_Brand_Asset.png"
+            className="bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-black/10 hover:bg-zinc-800 transition-all"
+          >
+            Download Asset
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
                 {/* TWO COLUMN GRID FOR RESULTS */}
                 {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
                   <div className="columns-1 md:columns-2 gap-6 space-y-6">
                       {Object.entries(bundle || {}).map(([platform, content]) => (
-                        <ResultCard 
-                            key={platform}
-                            platform={platform} 
-                            content={content} 
-                            projectId={currentProjectId}
-                            fetchHistory={fetchHistory}
-                            isGenerating={isGenerating} // Pass loading state
-                            onRegenerate={() => handleSingleRegenerate(platform)} 
-                            onGenerateImage={handleGenerateImage} // Pass function
-                            onShare={() => { /* share logic */ }}
-                        />
-                      ))}
+  <ResultCard 
+      key={platform}
+      platform={platform} 
+      content={content} 
+      projectId={currentProjectId}
+      fetchHistory={fetchHistory}
+      isGenerating={isGenerating} // Pass loading state
+      onRegenerate={() => handleSingleRegenerate(platform)} 
+      onGenerateImage={() => handleGenerateImage(content)} // Pass content string
+      onShare={() => { /* share logic */ }}
+  />
+))}
                   </div>
                 )}
               </div>
