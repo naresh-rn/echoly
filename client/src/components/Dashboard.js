@@ -241,7 +241,6 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-body text-slate-900 overflow-hidden">
-      
       {/* Global Styles */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Anek+Odia:wght@300;400;500;600;700&display=swap');
@@ -332,48 +331,32 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 
                 {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
 
+                {/* In your Dashboard.js JSX return */}
                 {generatedImage && (
-                  <div className="max-w-6xl mx-auto mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-2xl overflow-hidden">
+                  <div className="max-w-6xl mx-auto mb-10 animate-in fade-in zoom-in duration-500">
+                    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
                       
-                      {/* Visual Header */}
-                      <div className="px-8 py-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          EchoThread Visual Engine (Powered by Puter)
-                        </span>
-                          <button 
-                            onClick={() => onGenerateImage(editedContent)} 
-                            disabled={isGenerating}
-                            className={`ml-auto flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[10px] font-bold uppercase transition-all 
-                              ${isGenerating ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'}`}
-                          >
-                            {isGenerating ? (
-                              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <ImageIcon size={14} />
-                            )}
-                            <span>{isGenerating ? "Drawing..." : "Create Visual"}</span>
-                          </button>
-                      </div>
-
-                      {/* 16:9 Aspect Ratio Container */}
-                      <div className="aspect-video w-full bg-slate-900 overflow-hidden group">
+                      {/* 16:9 Ratio forced via aspect-video */}
+                      <div className="aspect-video w-full bg-slate-900 overflow-hidden relative group">
                         <img 
                           src={generatedImage} 
-                          alt="Puter AI Visual" 
+                          alt="Technical Visual" 
                           className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                         />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                       </div>
 
-                      {/* Actions */}
-                      <div className="p-6 flex justify-between items-center bg-white">
-                        <div className="text-[10px] font-bold text-slate-300">1024 x 576 • 4K UPSCALE</div>
+                      <div className="p-6 flex justify-between items-center bg-white border-t">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Asset Format</span>
+                          <span className="text-xs font-bold text-slate-900">16:9 Cinematic High-Res</span>
+                        </div>
                         <a 
                           href={generatedImage} 
-                          download="asset-visual.png"
+                          download="Echoly_Technical_Asset.png"
                           className="bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-black/10 hover:bg-zinc-800 transition-all"
                         >
-                          Export High-Res Asset
+                          Export 4K Asset
                         </a>
                       </div>
                     </div>
