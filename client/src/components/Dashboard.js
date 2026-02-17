@@ -192,30 +192,30 @@ const handleRepurpose = async (type, content, tone) => {
 
 // Dashboard.js
 
-const handleGenerateImage = async (cardContent) => {
-  if (!cardContent) return;
+const handleGenerateImage = async (content) => {
+  if (!content) return;
   
   try {
     setIsGenerating(true);
-    setGeneratedImage(null); // Reset for new visual
+    setGeneratedImage(null); // Clear old image
 
     const token = localStorage.getItem('token');
-    
-    // We send the 'content' which could be a transcript or blog body
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: cardContent }, 
+      { prompt: content }, 
       { headers: { 'x-auth-token': token } }
     );
 
+    // Set the high-quality image
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
     setGeneratedImage(imageUrl);
     
-    // Smooth scroll to the top preview box
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
   } catch (error) {
-    console.error("Echoly Image Error:", error);
-    alert("The engine is analyzing your content essence. Please try again in 5 seconds.");
+    console.error("Image Error:", error);
+    // Show the actual error message from the backend
+    const serverMsg = error.response?.data?.error || "Connection error";
+    alert(serverMsg);
   } finally {
     setIsGenerating(false);
   }
@@ -245,7 +245,7 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
 };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-body text-slate-900 overflow-hidden">
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col md:flex-row font-body text-slate-900 overflow-x-hidden">
       {/* Global Styles */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Anek+Odia:wght@300;400;500;600;700&display=swap');
@@ -256,53 +256,77 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
         @keyframes shimmer { 100% { transform: translateX(100%); } }
       `}</style>
 
-      {/* MOBILE HEADER */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-           <Zap size={20} fill="black" />
-           <span className="font-bold text-lg pt-2">Echoly</span>
+      {/* 1. MOBILE BACKDROP (Added this) */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* 2. MOBILE HEADER */}
+    <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 sticky top-0 z-50">
+      <div className="flex items-center gap-2">
+         <Zap size={20} fill="black" />
+         <span className="font-bold text-lg pt-1">Echoly</span>
+      </div>
+      <button 
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+      >
+        {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+    </div>
+
+    {/* 3. SIDEBAR */}
+    <aside className={`
+      fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 
+      flex flex-col transform transition-transform duration-300 ease-in-out
+      md:translate-x-0 md:static
+      ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
+    `}>
+      {/* Sidebar Header (Hidden on Mobile because of Mobile Header) */}
+      <div className="p-8 hidden md:flex items-center gap-3">
+        <div className="bg-black p-2 rounded-xl text-white">
+          <Zap size={20} fill="currentColor" />
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 hover:bg-gray-100 rounded-lg">
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <span className="font-bold text-2xl tracking-tight">Echoly</span>
       </div>
 
-      {/* SIDEBAR */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-100 flex flex-col transform transition-transform duration-300 md:translate-x-0 md:static ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-8 hidden md:flex items-center gap-3">
-          <div className="bg-black p-2 pt-2 rounded-xl shadow-md shadow-black/10 text-white">
-            <Zap size={20} fill="currentColor" />
-          </div>
-          <span className="font-bold text-2xl pt-2 tracking-tight">Echoly</span>
-        </div>
-
-        <nav className="flex-grow px-4 mt-4">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 mb-4">Main Menu</div>
-          <SidebarItem to="/dashboard" className='pt-2'icon={Layout} label="Dashboard" exact/>
+      {/* Navigation Links */}
+      <nav className="flex-grow px-4 mt-6 md:mt-0">
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 mb-4">Main Menu</div>
+        {/* Added onClick to SidebarItem so it closes the menu when a link is clicked on mobile */}
+        <div onClick={() => setIsMobileMenuOpen(false)}>
+          <SidebarItem to="/dashboard" icon={Layout} label="Dashboard" exact/>
           <SidebarItem to="/dashboard/vault" icon={Archive} label="Vault (History)" />
-          
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 mb-4 mt-8">System</div>
+        </div>
+        
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 mb-4 mt-8">System</div>
+        <div onClick={() => setIsMobileMenuOpen(false)}>
           <SidebarItem to="/dashboard/settings" icon={Settings} label="Settings" />
           <SidebarItem to="/about" icon={Activity} label="Status" />
-        </nav>
-
-        <div className="p-6 border-t border-gray-50 mt-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold border border-gray-200">
-                 {user?.name?.charAt(0).toUpperCase() || <User size={14} />}
-              </div>
-              <div className="flex flex-col">
-                 <span className="text-xs font-bold leading-none">{user?.name || 'User'}</span>
-                 <span className="text-[10px] text-gray-400 mt-1">Free Plan</span>
-              </div>
-            </div>
-            <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 p-2 transition-colors">
-              <LogOut size={16} />
-            </button>
-          </div>
         </div>
-      </aside>
+      </nav>
+
+      {/* Profile Section */}
+      <div className="p-6 border-t border-gray-50 bg-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold border border-gray-200">
+               {user?.name?.charAt(0).toUpperCase() || 'U'}
+            </div>
+            <div className="flex flex-col">
+               <span className="text-xs font-bold leading-none">{user?.name || 'User'}</span>
+               <span className="text-[10px] text-gray-400 mt-1">Free Plan</span>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 p-2">
+            <LogOut size={16} />
+          </button>
+        </div>
+      </div>
+    </aside>
 
       {/* MAIN CONTENT */}
       <main className="flex-1 h-[calc(100vh-60px)] md:h-screen overflow-y-auto p-5 md:p-12 relative">
@@ -375,18 +399,18 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
                 {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
                   <div className="columns-1 md:columns-2 gap-6 space-y-6">
                       {Object.entries(bundle || {}).map(([platform, content]) => (
-  <ResultCard 
-      key={platform}
-      platform={platform} 
-      content={content} 
-      projectId={currentProjectId}
-      fetchHistory={fetchHistory}
-      isGenerating={isGenerating} // Pass loading state
-      onRegenerate={() => handleSingleRegenerate(platform)} 
-      onGenerateImage={() => handleGenerateImage(content)} // Pass content string
-      onShare={() => { /* share logic */ }}
-  />
-))}
+                      <ResultCard 
+                          key={platform}
+                          platform={platform} 
+                          content={content} 
+                          projectId={currentProjectId}
+                          fetchHistory={fetchHistory}
+                          isGenerating={isGenerating} // Pass loading state
+                          onRegenerate={() => handleSingleRegenerate(platform)} 
+                          onGenerateImage={() => handleGenerateImage(content)} // Pass content string
+                          onShare={() => { /* share logic */ }}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -412,6 +436,7 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false }) => {
             } />
             <Route path="/settings" element={<SettingsPage user={user} />} />
             <Route path="/about" element={<AboutPage user={user} />} />
+            <Route path="/about" element={<StatusPage user={user} />} />
           </Routes>
         </div>
       </main>

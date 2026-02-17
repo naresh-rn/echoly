@@ -451,63 +451,64 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
-    const { prompt } = req.body; // This is the transcript or text from Echoly
+    const { prompt } = req.body;
 
-    // --- STEP 1: THE ECHOLY VISUAL DIRECTOR (Groq) ---
-    // This identifies the subject from ANY input (YouTube, Audio, Text)
+    const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+
+    if (!ACCOUNT_ID || !API_TOKEN) {
+      return res.status(500).json({ error: "Cloudflare credentials missing in Render Environment." });
+    }
+
+    // 1. THE BRAIN: Generate a high-quality visual description
     const brainResponse = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
-          content: `You are the Lead Visual Designer for Echoly, an AI content system. 
-          Your task: Analyze the provided content and design a single 'Master Visual Asset'.
-          
-          1. SUBJECT IDENTIFICATION: Distill the content into its core topic (e.g., React JS, Spiritual Growth, Stock Market, Fitness).
-          2. THE ASSET: Describe a single, high-fidelity 3D object representing this topic.
-             - If TECH: A translucent frosted glass version of the logo or a glowing data node.
-             - If BUSINESS: Crystalline geometric prisms or architectural growth structures.
-             - If LIFESTYLE: Premium organic textures, smooth 3D shapes, or sophisticated product renders.
-          3. AESTHETIC: Set in a vast, minimalist dark studio. Ray-traced reflections, volumetric soft lighting, 16:9 wide angle.
-          
-          STRICT CONSTRAINTS: 
-          - NO HUMANS, NO FACES, NO BODY PARTS.
-          - NO TEXT, NO LETTERS, NO NUMBERS.
-          - NO FIRE, NO ANIMALS, NO MESSY BACKGROUNDS.
-          - Use a professional SaaS color palette (Electric Blue, Slate, or Copper).`
+          content: "You are a tech visual director. Create a 15-word technical 3D scene description. Use words like: frosted glass, glowing cyan, minimalist, 16:9. NO humans, NO text, NO birds." 
         },
-        { role: "user", content: `Analyze this content: ${prompt.substring(0, 1200)}` }
+        { role: "user", content: `Context: ${prompt.substring(0, 300)}` }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    const engineeredVisual = brainResponse.choices[0].message.content.replace(/["'#]/g, '');
-    console.log("🎨 Echoly Visual Blueprint:", engineeredVisual.substring(0, 70));
+    // Clean the prompt of any quotes that might break the JSON
+    const visualPrompt = brainResponse.choices[0].message.content.replace(/["']/g, "");
 
-    // --- STEP 2: CLOUDFLARE SDXL GENERATION ---
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-
-    const cfResponse = await axios({
-      url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
+    // 2. THE ARTIST: Call Cloudflare Workers AI
+    console.log("🚀 Calling Cloudflare SDXL...");
+    
+    const response = await axios({
+      url: `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiToken}`,
+        "Authorization": `Bearer ${API_TOKEN}`,
         "Content-Type": "application/json",
       },
-      data: {
-        // We force the 16:9 Cinematic look here
-        prompt: `16:9 CINEMATIC WIDE ANGLE. High-end professional technical asset: ${engineeredVisual}. Unreal Engine 5 render, 8k, ray-traced glass, sharp focus, professional color grading, minimalist background, masterpiece.`,
-        num_steps: 30, 
-      },
-      responseType: 'arraybuffer',
+      data: JSON.stringify({ 
+        prompt: visualPrompt,
+        num_steps: 20 
+      }),
+      responseType: 'arraybuffer', // Required to receive image binary
     });
 
-    const base64Image = Buffer.from(cfResponse.data).toString('base64');
-    res.json({ imageData: base64Image, mimeType: "image/png" });
+    // 3. RETURN DATA
+    const base64Image = Buffer.from(response.data).toString('base64');
+    res.json({ 
+      imageData: base64Image, 
+      mimeType: "image/png" 
+    });
 
   } catch (error) {
-    console.error("Echoly Engine Error:", error.message);
-    res.status(500).json({ error: "Failed to generate visual asset." });
+    // Detailed error logging for your Render Console
+    if (error.response && error.response.data) {
+        const errDesc = Buffer.from(error.response.data).toString();
+        console.error("❌ Cloudflare API Error:", errDesc);
+    } else {
+        console.error("❌ Request Error:", error.message);
+    }
+    
+    res.status(500).json({ error: "Cloudflare failed to generate image. Check Account ID and Token." });
   }
 });
 
