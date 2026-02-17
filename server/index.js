@@ -452,31 +452,29 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt } = req.body;
-    
-    // --- STEP 1: THE TECHNICAL BRAIN (Groq) ---
-    // We tell Groq to STOP being metaphorical and START being technical.
-    const brainResponse = await groq.chat.completions.create({
+
+    // --- STEP 1: THE BRAND ARCHITECT (Groq) ---
+    // This extracts the "Angular" or "React" and designs a professional scene
+    const brandDesigner = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
-          content: `You are a Technical UI Designer. 
-          Identify the main technology or topic in the text (e.g., Angular, React, JavaScript).
-          Create a prompt for a professional software header.
-          - Describe the official logo of the technology in a 3D glass style.
-          - Add tech elements: code snippets, futuristic circuit lines, or a clean dashboard.
-          - Style: Professional, 16:9, tech-corporate, minimalist.
-          - DO NOT use animals, birds, or fire.
-          - NO TEXT in the image.` 
+          content: `You are a Senior Brand Designer. 
+          1. Identify the core technology in the text (e.g. Angular, React, Node.js).
+          2. Describe its official logo as a 3D translucent glass sculpture.
+          3. Place it on a clean, dark, minimalist tech desk with soft bokeh.
+          4. Style: 16:9 Cinematic, Apple-style product photography, soft blue and slate colors.
+          5. CONSTRAINT: NO ANIMALS. NO FIRE. NO TEXT. NO HUMANS.` 
         },
-        { role: "user", content: `Content Title: ${prompt.substring(0, 150)}` }
+        { role: "user", content: `Topic: ${prompt.substring(0, 200)}` }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    const technicalPrompt = brainResponse.choices[0].message.content.replace(/["'#]/g, '');
-    console.log("🎯 Technical Prompt:", technicalPrompt);
+    const refinedPrompt = brandDesigner.choices[0].message.content.replace(/["'#]/g, '');
+    console.log("🎨 Designing Visual for:", refinedPrompt.substring(0, 50));
 
-    // --- STEP 2: CLOUDFLARE WORKERS AI ---
+    // --- STEP 2: CLOUDFLARE SDXL EXECUTION ---
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 
@@ -487,10 +485,10 @@ app.post('/api/generate-image', auth, async (req, res) => {
         Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
-      // We combine the technical prompt with strict quality modifiers
       data: {
-        prompt: `${technicalPrompt}, official branding colors, software architecture, high-end SaaS landing page style, 8k, sharp focus, 16:9 aspect ratio, clean minimalist background`,
-        num_steps: 25, 
+        // We force 16:9 framing by describing the horizontal composition
+        prompt: `CINEMATIC 16:9 WIDE ANGLE. ${refinedPrompt}. High-end software landing page graphic, ray-traced glass, 8k resolution, sharp focus, volumetric studio lighting, professional tech aesthetic.`,
+        num_steps: 30, // Higher steps = better quality
       },
       responseType: 'arraybuffer',
     });
@@ -499,8 +497,8 @@ app.post('/api/generate-image', auth, async (req, res) => {
     res.json({ imageData: base64Image, mimeType: "image/png" });
 
   } catch (error) {
-    console.error("Cloudflare Error:", error.message);
-    res.status(500).json({ error: "Failed to generate technical asset." });
+    console.error("Cloudflare Engine Error:", error.message);
+    res.status(500).json({ error: "Image engine failed to render brand asset." });
   }
 });
 

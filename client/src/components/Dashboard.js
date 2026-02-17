@@ -190,13 +190,13 @@ const handleRepurpose = async (type, content, tone) => {
 
 // Inside Dashboard.js
 // Dashboard.js
+
 const handleGenerateImage = async (content) => {
   if (!content) return;
   
   try {
     setIsGenerating(true);
-    // 1. We clear old images so the user sees it's refreshing
-    setGeneratedImage(null); 
+    setGeneratedImage(null); // Clear old image to show fresh start
 
     const token = localStorage.getItem('token');
     const res = await axios.post(`${API_BASE}/generate-image`, 
@@ -206,9 +206,13 @@ const handleGenerateImage = async (content) => {
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
     setGeneratedImage(imageUrl);
+    
+    // Smooth scroll to the top to show the new visual
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
   } catch (error) {
-    alert("System is refining the visual. Please try again in 5 seconds.");
+    console.error("Visual Error:", error);
+    alert("The engine is refining your brand visual. Please try again in 10 seconds.");
   } finally {
     setIsGenerating(false);
   }
