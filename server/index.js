@@ -449,35 +449,38 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 // --- MAIN IMAGE GENERATOR ---
 // server/index.js
 
+// server/index.js
+
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // --- STEP 1: THE BRAND ARCHITECT (Groq) ---
-    // This extracts the "Angular" or "React" and designs a professional scene
-    const brandDesigner = await groq.chat.completions.create({
+    // --- 1. CONFIG CHECK ---
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+    if (!accountId || !apiToken) {
+      console.error("❌ MISSING CLOUDFLARE CONFIG: Check Render Env Variables");
+      return res.status(500).json({ error: "Server Configuration Error: Missing Cloudflare Credentials" });
+    }
+
+    // --- 2. GROQ VISUAL BRAIN ---
+    // This part converts your text to a technical visual prompt
+    const brainResponse = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
-          content: `You are a Senior Brand Designer. 
-          1. Identify the core technology in the text (e.g. Angular, React, Node.js).
-          2. Describe its official logo as a 3D translucent glass sculpture.
-          3. Place it on a clean, dark, minimalist tech desk with soft bokeh.
-          4. Style: 16:9 Cinematic, Apple-style product photography, soft blue and slate colors.
-          5. CONSTRAINT: NO ANIMALS. NO FIRE. NO TEXT. NO HUMANS.` 
+          content: "You are a tech visual designer. Convert the topic into a 15-word technical 3D asset description. Style: glass, neon, professional, 16:9. NO HUMANS. NO TEXT." 
         },
-        { role: "user", content: `Topic: ${prompt.substring(0, 200)}` }
+        { role: "user", content: prompt.substring(0, 300) }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    const refinedPrompt = brandDesigner.choices[0].message.content.replace(/["'#]/g, '');
-    console.log("🎨 Designing Visual for:", refinedPrompt.substring(0, 50));
+    const visualPrompt = brainResponse.choices[0].message.content;
+    console.log("🎯 Cloudflare Prompt:", visualPrompt);
 
-    // --- STEP 2: CLOUDFLARE SDXL EXECUTION ---
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-
+    // --- 3. CLOUDFLARE AI CALL ---
     const cfResponse = await axios({
       url: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
       method: "POST",
@@ -485,20 +488,24 @@ app.post('/api/generate-image', auth, async (req, res) => {
         Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
-      data: {
-        // We force 16:9 framing by describing the horizontal composition
-        prompt: `CINEMATIC 16:9 WIDE ANGLE. ${refinedPrompt}. High-end software landing page graphic, ray-traced glass, 8k resolution, sharp focus, volumetric studio lighting, professional tech aesthetic.`,
-        num_steps: 30, // Higher steps = better quality
+      data: { 
+        prompt: visualPrompt,
+        // Optional: you can add guidance or strength here
       },
-      responseType: 'arraybuffer',
+      responseType: 'arraybuffer', // Crucial for image data
+      timeout: 30000 // Give it 30 seconds to draw
     });
+
+    console.log("✅ Cloudflare successfully generated the image");
 
     const base64Image = Buffer.from(cfResponse.data).toString('base64');
     res.json({ imageData: base64Image, mimeType: "image/png" });
 
   } catch (error) {
-    console.error("Cloudflare Engine Error:", error.message);
-    res.status(500).json({ error: "Image engine failed to render brand asset." });
+    // This will print the EXACT reason for the 500 error in your Render logs
+    console.error("❌ CLOUDFLARE AI ERROR:", error.response ? error.response.data.toString() : error.message);
+    
+    res.status(500).json({ error: "The AI Engine is busy or misconfigured. Check backend logs." });
   }
 });
 

@@ -192,26 +192,21 @@ const handleGenerateImage = async (content) => {
   if (!content) return;
   
   try {
-    setIsGenerating(true);
-    setGeneratedImage(null); // Clear old image to show fresh start
+      setIsGenerating(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_BASE}/generate-image`, 
+        { prompt: content }, 
+        { headers: { 'x-auth-token': token } }
+      );
 
-    const token = localStorage.getItem('token');
-    const res = await axios.post(`${API_BASE}/generate-image`, 
-      { prompt: content }, 
-      { headers: { 'x-auth-token': token } }
-    );
-
-    const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
-    setGeneratedImage(imageUrl);
-    
-    // Smooth scroll to the top to show the new visual
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
+      const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
+      setGeneratedImage(imageUrl);
   } catch (error) {
-    console.error("Visual Error:", error);
-    alert("The engine is refining your brand visual. Please try again in 10 seconds.");
+      // This is where your alert is coming from
+      const msg = error.response?.data?.error || "Image engine failure";
+      alert(msg);
   } finally {
-    setIsGenerating(false);
+      setIsGenerating(false);
   }
 };
 
