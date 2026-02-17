@@ -190,34 +190,25 @@ const handleRepurpose = async (type, content, tone) => {
 
 // Inside Dashboard.js
 // Dashboard.js
-
-const handleGenerateImage = async (content, platformName) => {
+const handleGenerateImage = async (content) => {
   if (!content) return;
   
   try {
     setIsGenerating(true);
+    // 1. We clear old images so the user sees it's refreshing
+    setGeneratedImage(null); 
+
     const token = localStorage.getItem('token');
-
-    // Remove old state to show fresh loading
-    setGeneratedImage(null);
-
     const res = await axios.post(`${API_BASE}/generate-image`, 
-      { 
-        prompt: content, 
-        platform: platformName 
-      }, 
+      { prompt: content }, 
       { headers: { 'x-auth-token': token } }
     );
 
     const imageUrl = `data:${res.data.mimeType};base64,${res.data.imageData}`;
     setGeneratedImage(imageUrl);
-    
-    // Smooth scroll to the top preview
     window.scrollTo({ top: 0, behavior: 'smooth' });
-
   } catch (error) {
-    console.error("Image Error:", error);
-    alert("The AI Engine is busy. Please try again in 10 seconds.");
+    alert("System is refining the visual. Please try again in 5 seconds.");
   } finally {
     setIsGenerating(false);
   }

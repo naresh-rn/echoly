@@ -451,28 +451,32 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
-    const { prompt, platform } = req.body;
+    const { prompt } = req.body;
     
-    // 1. THE VISUAL BRAIN (Groq)
-    // We force Groq to create a METAPHOR so the image is 100% relevant
+    // --- STEP 1: THE TECHNICAL BRAIN (Groq) ---
+    // We tell Groq to STOP being metaphorical and START being technical.
     const brainResponse = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
-          content: `You are the Visual Director for EchoThread. 
-          Convert technical text into a PROFESSIONAL CONCEPTUAL METAPHOR.
-          - Topic: ${prompt.substring(0, 100)}
-          - Style: High-end 3D render, minimalist, 16:9 cinematic.
-          - Mandatory: NO HUMANS, NO TEXT, NO FACES.` 
+          content: `You are a Technical UI Designer. 
+          Identify the main technology or topic in the text (e.g., Angular, React, JavaScript).
+          Create a prompt for a professional software header.
+          - Describe the official logo of the technology in a 3D glass style.
+          - Add tech elements: code snippets, futuristic circuit lines, or a clean dashboard.
+          - Style: Professional, 16:9, tech-corporate, minimalist.
+          - DO NOT use animals, birds, or fire.
+          - NO TEXT in the image.` 
         },
-        { role: "user", content: prompt.substring(0, 400) }
+        { role: "user", content: `Content Title: ${prompt.substring(0, 150)}` }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    const visualMetaphor = brainResponse.choices[0].message.content.replace(/["'#]/g, '');
+    const technicalPrompt = brainResponse.choices[0].message.content.replace(/["'#]/g, '');
+    console.log("🎯 Technical Prompt:", technicalPrompt);
 
-    // 2. CLOUDFLARE WORKERS AI CALL
+    // --- STEP 2: CLOUDFLARE WORKERS AI ---
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 
@@ -483,23 +487,20 @@ app.post('/api/generate-image', auth, async (req, res) => {
         Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
+      // We combine the technical prompt with strict quality modifiers
       data: {
-        prompt: `${visualMetaphor}, photorealistic, masterpiece, 8k, cinematic lighting, wide angle, high-end tech aesthetic, unreal engine 5 render`,
-        num_steps: 20, // High quality
+        prompt: `${technicalPrompt}, official branding colors, software architecture, high-end SaaS landing page style, 8k, sharp focus, 16:9 aspect ratio, clean minimalist background`,
+        num_steps: 25, 
       },
       responseType: 'arraybuffer',
     });
 
-    // 3. CONVERT AND SEND
     const base64Image = Buffer.from(cfResponse.data).toString('base64');
-    res.json({ 
-      imageData: base64Image, 
-      mimeType: "image/png" 
-    });
-  
+    res.json({ imageData: base64Image, mimeType: "image/png" });
+
   } catch (error) {
     console.error("Cloudflare Error:", error.message);
-    res.status(500).json({ error: "Cloudflare AI failed to generate image." });
+    res.status(500).json({ error: "Failed to generate technical asset." });
   }
 });
 
