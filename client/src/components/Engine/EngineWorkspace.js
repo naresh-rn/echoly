@@ -7,7 +7,8 @@ import {
   UploadCloud,  
   Check, 
   ArrowRight,
-  Settings2
+  Settings2,
+  Sparkles
 } from 'lucide-react';
 
 export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown }) {
@@ -47,28 +48,28 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
   const activeFormat = INPUT_FORMATS.find(f => f.id === type);
 
   return (
-    <div className="bg-white rounded shadow-lg shadow-zinc-200/40 border border-zinc-300 overflow-hidden flex flex-col lg:flex-row font-sans">
+    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl shadow-gray-200/50 overflow-hidden flex flex-col lg:flex-row">
       
       {/* ==============================================
-          LEFT PANEL: CONTROLS (Balanced Size)
+          LEFT PANEL: CONTROLS
       =============================================== */}
-      <div className="w-full lg:w-[280px] bg-zinc-50/80 p-5 border-b lg:border-b-0 lg:border-r border-zinc-200 flex flex-col gap-5">
+      <div className="w-full lg:w-[300px] bg-gray-50/50 p-8 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col gap-8">
         
         {/* Header */}
-        <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-black rounded-md text-white">
-                <Settings2 size={16} />
+        <div className="flex items-center gap-3">
+            <div className="p-2 bg-black rounded-xl text-white shadow-lg shadow-black/10">
+                <Settings2 size={18} />
             </div>
             <div>
-                <h2 className="text-sm font-black text-black uppercase tracking-tight leading-none">Setup</h2>
-                <p className="text-[10px] font-bold text-zinc-400 mt-0.5 uppercase tracking-wide">Config</p>
+                <h2 className="text-xs font-black text-black uppercase tracking-widest">Configuration</h2>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Setup Engine</p>
             </div>
         </div>
 
-        {/* 1. INPUT FORMAT GRID */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-1">Source</label>
-          <div className="grid grid-cols-2 gap-2">
+        {/* 1. SOURCE SELECTION */}
+        <div className="space-y-4">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Source Type</label>
+          <div className="grid grid-cols-2 gap-2.5">
             {INPUT_FORMATS.map((format) => {
               const Icon = format.icon;
               const isSelected = type === format.id;
@@ -77,14 +78,14 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
                   key={format.id}
                   onClick={() => handleTypeChange(format.id)}
                   className={`
-                    group flex items-center justify-center gap-2 px-2 py-2.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-all duration-200
+                    group flex flex-col items-center justify-center gap-2 py-4 rounded-2xl border transition-all duration-300
                     ${isSelected 
-                      ? 'bg-black border-black text-white shadow-md transform scale-[1.02]' 
-                      : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-black'}
+                      ? 'bg-white border-gray-200 text-black shadow-sm ring-2 ring-black/5' 
+                      : 'bg-transparent border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'}
                   `}
                 >
-                  <Icon size={14} strokeWidth={2.5} />
-                  <span>{format.label}</span>
+                  <Icon size={18} strokeWidth={isSelected ? 2.5 : 2} />
+                  <span className="text-[10px] font-bold uppercase tracking-tight">{format.label}</span>
                 </button>
               );
             })}
@@ -92,9 +93,9 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
         </div>
 
         {/* 2. TONE SELECTION */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-1">Tone</label>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="space-y-4">
+          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Output Tone</label>
+          <div className="flex flex-wrap gap-2">
             {TONES.map((t) => {
               const isSelected = tone === t;
               return (
@@ -102,10 +103,10 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
                   key={t}
                   onClick={() => setTone(t)}
                   className={`
-                    px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-all
+                    px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border
                     ${isSelected 
-                      ? 'bg-zinc-800 border-zinc-800 text-white' 
-                      : 'bg-white border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-black'}
+                      ? 'bg-black border-black text-white shadow-md' 
+                      : 'bg-white border-gray-100 text-gray-400 hover:border-gray-300 hover:text-black'}
                   `}
                 >
                   {t}
@@ -117,48 +118,52 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
       </div>
 
       {/* ==============================================
-          RIGHT PANEL: WORKSPACE (Balanced Size)
+          RIGHT PANEL: WORKSPACE
       =============================================== */}
-      <div className="flex-1 p-6 flex flex-col bg-white relative">
+      <div className="flex-1 p-8 flex flex-col bg-white">
         
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <activeFormat.icon size={18} className="text-black" />
-            <h2 className="text-sm font-black text-black uppercase tracking-tight">Input Content</h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-50 rounded-lg text-gray-400">
+                <activeFormat.icon size={16} />
+            </div>
+            <h2 className="text-xs font-black text-black uppercase tracking-widest">Input Area</h2>
           </div>
         </div>
 
-        {/* Dynamic Input Area (Height: 11rem / 176px) */}
-        <div className="flex-1 mb-4">
+        {/* Dynamic Input Area */}
+        <div className="flex-1 mb-8">
           {type === 'file' ? (
             /* FILE DROPZONE */
             <div 
               onClick={() => fileInputRef.current?.click()}
               className={`
-                h-44 w-full border border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group
+                h-52 w-full border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-500 group
                 ${selectedFile 
-                  ? 'border-black bg-zinc-50' 
-                  : 'border-zinc-300 hover:border-black hover:bg-zinc-50'}
+                  ? 'border-emerald-500 bg-emerald-50/30' 
+                  : 'border-gray-100 bg-gray-50/30 hover:border-black hover:bg-gray-50'}
               `}
             >
               <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept=".mp3,.mp4,.wav,.m4a" />
               
               {selectedFile ? (
-                <div className="text-center animate-in fade-in zoom-in-95">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-black text-white rounded-full text-[10px] font-bold uppercase mb-2 shadow-sm">
-                    <Check size={12} /> Ready
+                <div className="text-center animate-in fade-in zoom-in-95 duration-500">
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-500 text-white rounded-full text-[10px] font-black uppercase mb-3 shadow-lg shadow-emerald-200">
+                    <Check size={12} strokeWidth={3} /> Upload Ready
                   </div>
-                  <p className="text-zinc-900 font-bold text-xs truncate max-w-[200px]">{selectedFile.name}</p>
-                  <button onClick={clearFile} className="mt-2 text-[10px] font-bold text-zinc-400 hover:text-red-600 uppercase tracking-wide underline transition-colors">
-                    Remove
+                  <p className="text-black font-bold text-sm truncate max-w-[250px]">{selectedFile.name}</p>
+                  <button onClick={clearFile} className="mt-3 text-[10px] font-black text-gray-400 hover:text-red-500 uppercase tracking-[0.2em] transition-colors">
+                    Remove File
                   </button>
                 </div>
               ) : (
                 <div className="text-center">
-                   <UploadCloud size={24} className="text-zinc-300 mx-auto mb-2 group-hover:text-black transition-colors" />
-                   <p className="text-xs font-bold text-zinc-900 uppercase tracking-wide">Click to Upload</p>
-                   <p className="text-[10px] text-zinc-400 mt-0.5">MP3 / MP4 / WAV</p>
+                   <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+                      <UploadCloud size={24} className="text-gray-300 group-hover:text-black transition-colors" />
+                   </div>
+                   <p className="text-[11px] font-black text-black uppercase tracking-widest">Drop audio or video here</p>
+                   <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-tighter">MP3, MP4, WAV, M4A up to 50MB</p>
                 </div>
               )}
             </div>
@@ -167,35 +172,61 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
             <textarea 
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder={activeFormat?.id === 'text' ? "Paste script or notes..." : "Paste URL here..."}
-              className="w-full h-44 bg-zinc-50 hover:bg-zinc-100 focus:bg-white text-sm font-medium text-zinc-900 placeholder-zinc-400 resize-none outline-none border border-transparent focus:border-zinc-300 rounded-xl p-4 transition-all leading-relaxed"
+              placeholder={activeFormat?.id === 'text' ? "Enter your script or core ideas here..." : "https://www.youtube.com/watch?v=..."}
+              className="w-full h-52 bg-gray-50/50 hover:bg-gray-50 focus:bg-white text-base font-medium text-gray-800 placeholder-gray-300 resize-none outline-none border border-gray-100 focus:border-gray-200 rounded-[2rem] p-8 transition-all leading-relaxed shadow-inner"
             />
           )}
         </div>
 
         {/* Action Button */}
-        <button 
-          onClick={() => onRepurpose(type, type === 'file' ? selectedFile : content, tone)}
-          disabled={isGenerating || cooldown > 0 || (!content && !selectedFile)}
-          className={`
-            w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all duration-300 flex items-center justify-center gap-2 shadow-lg
-            ${(isGenerating || cooldown > 0 || (!content && !selectedFile))
-              ? 'bg-zinc-100 text-zinc-300 cursor-not-allowed shadow-none' 
-              : 'bg-black text-white hover:bg-zinc-800 hover:scale-[1.01] active:scale-[0.99] shadow-zinc-200'}
-          `}
-        >
-          {isGenerating ? (
-            <span className="flex items-center gap-2">
-              Processing <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-            </span>
-          ) : cooldown > 0 ? (
-            <span>Wait {cooldown}s</span>
-          ) : (
-            <>
-              Initialize <ArrowRight size={14} />
-            </>
-          )}
-        </button>
+        <div className="relative group">
+            {/* Pulsing glow background for active state */}
+            {!isGenerating && !cooldown && (content || selectedFile) && (
+                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
+            )}
+            
+            <button 
+                onClick={() => onRepurpose(type, type === 'file' ? selectedFile : content, tone)}
+                disabled={isGenerating || cooldown > 0 || (!content && !selectedFile)}
+                className={`
+                    relative w-full py-5 rounded-[1.25rem] font-black text-xs uppercase tracking-[0.3em] transition-all duration-500 flex items-center justify-center gap-3
+                    ${(isGenerating || cooldown > 0 || (!content && !selectedFile))
+                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed' 
+                    : 'bg-black text-white hover:bg-zinc-900 hover:translate-y-[-2px] active:translate-y-[0px] shadow-2xl shadow-black/20'}
+                `}
+            >
+                {isGenerating ? (
+                    <div className="flex items-center gap-3">
+                        <span className="animate-pulse">Processing Mission</span>
+                        <div className="flex gap-1">
+                            <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                            <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                            <div className="w-1 h-1 bg-white rounded-full animate-bounce"></div>
+                        </div>
+                    </div>
+                ) : cooldown > 0 ? (
+                    <span className="opacity-50 tracking-[0.1em]">Engine Cooldown {cooldown}s</span>
+                ) : (
+                    <>
+                        <Sparkles size={16} className="text-blue-400" />
+                        Initialize Repurpose
+                        <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    </>
+                )}
+            </button>
+        </div>
+
+        {/* System Footer Info */}
+        <div className="mt-4 flex justify-center gap-6">
+            <div className="flex items-center gap-1.5">
+                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
+                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Neural Link Active</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+                <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
+                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">SDXL Visuals Engaged</span>
+            </div>
+        </div>
 
       </div>
     </div>

@@ -64,7 +64,7 @@ export default function Dashboard({ user, setUser }) {
       setBundle({});
       setProgress(0);
       setStatusText("Initializing Engine...");
-      setRawText(type === 'text' ? content : ""); // Save source text for regeneration
+      if (type === 'text') setRawText(content);
 
       const formData = new FormData();
       if (type === 'file') formData.append('file', content);
@@ -105,7 +105,7 @@ export default function Dashboard({ user, setUser }) {
                           }));
                       }
                       if (data.projectId) setCurrentProjectId(data.projectId);
-                  } catch (e) { console.log("Streaming data...") }
+                  } catch (e) { console.log("Streaming sync...") }
               }
             }
           }
@@ -120,7 +120,7 @@ export default function Dashboard({ user, setUser }) {
 
   // --- SINGLE ASSET REGENERATE ---
   const handleSingleRegenerate = async (platform) => {
-    if (!rawText) return alert("Source text missing. Try a new repurpose session.");
+    if (!rawText) return alert("Source text missing.");
     setIsGenerating(true);
     setStatusText(`Refining ${platform}...`);
     try {
@@ -165,13 +165,13 @@ export default function Dashboard({ user, setUser }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Echoly_Assets_${Date.now()}.txt`;
+    link.download = `Echoly_Assets.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // --- CLOUDFLARE IMAGE GENERATION ---
+  // --- IMAGE GENERATION ---
   const handleGenerateImage = async (content) => {
     if (!content) return;
     try {
@@ -186,7 +186,7 @@ export default function Dashboard({ user, setUser }) {
       setGeneratedImage(imageUrl);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      alert("AI Visual Engine is processing. Please try again in a moment.");
+      alert("Visual engine processing. Please try again.");
     } finally { setIsGenerating(false); }
   };
 
@@ -210,7 +210,7 @@ export default function Dashboard({ user, setUser }) {
       >
         <Icon size={20} className="shrink-0" />
         <span className={`leading-none whitespace-nowrap overflow-hidden transition-all duration-300 ${
-          isSidebarCollapsed && !isMobileMenuOpen ? 'md:w-0 md:opacity-0' : 'w-auto opacity-100'
+          isSidebarCollapsed ? 'md:w-0 md:opacity-0' : 'w-auto opacity-100'
         }`}>
           {label}
         </span>
@@ -232,12 +232,12 @@ export default function Dashboard({ user, setUser }) {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] md:hidden" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* 2. SIDEBAR (Collapsible & Responsive) */}
+      {/* 2. SIDEBAR */}
       <aside className={`
         fixed inset-y-0 left-0 z-[70] bg-white border-r border-gray-100 
-        flex flex-col transition-all duration-300 ease-in-out
-        md:translate-x-0 md:static
-        ${isMobileMenuOpen ? 'translate-x-0 w-72 shadow-2xl' : '-translate-x-full w-0 md:w-auto md:translate-x-0'}
+        flex flex-col transition-all duration-300 ease-in-out overflow-hidden
+        md:static md:translate-x-0
+        ${isMobileMenuOpen ? 'translate-x-0 w-72 shadow-2xl' : '-translate-x-full w-0 md:w-auto'}
         ${!isMobileMenuOpen && (isSidebarCollapsed ? 'md:w-24' : 'md:w-72')}
       `}>
         <div className="p-6 flex items-center justify-between">
@@ -245,7 +245,7 @@ export default function Dashboard({ user, setUser }) {
             <div className="bg-black p-2 rounded-xl text-white shrink-0">
               <Zap size={20} fill="currentColor" />
             </div>
-            <span className={`font-bold text-xl tracking-tighter transition-all duration-300 ${isSidebarCollapsed && !isMobileMenuOpen ? 'md:opacity-0' : 'opacity-100'}`}>
+            <span className={`font-bold text-xl tracking-tighter transition-all duration-300 ${isSidebarCollapsed ? 'md:opacity-0' : 'opacity-100'}`}>
               ECHOLY
             </span>
           </div>
@@ -255,13 +255,11 @@ export default function Dashboard({ user, setUser }) {
         </div>
 
         <nav className="flex-grow px-3 mt-4">
-          <div className={`text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-4 ${isSidebarCollapsed && !isMobileMenuOpen ? 'opacity-0' : 'opacity-100'}`}>Menu</div>
+          <div className={`text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-4 ${isSidebarCollapsed ? 'md:opacity-0' : 'opacity-100'}`}>Menu</div>
           <SidebarItem to="/dashboard" icon={Layout} label="Dashboard" exact/>
           <SidebarItem to="/dashboard/vault" icon={Archive} label="Vault" />
-          
           <div className="my-8 h-[1px] bg-gray-50 mx-4" />
-          
-          <div className={`text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-4 ${isSidebarCollapsed && !isMobileMenuOpen ? 'opacity-0' : 'opacity-100'}`}>System</div>
+          <div className={`text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 mb-4 ${isSidebarCollapsed ? 'md:opacity-0' : 'opacity-100'}`}>System</div>
           <SidebarItem to="/dashboard/pulse" icon={Activity} label="Pulse" />
           <SidebarItem to="/dashboard/status" icon={ShieldCheck} label="Status" />
           <SidebarItem to="/dashboard/settings" icon={Settings} label="Settings" />
@@ -272,7 +270,7 @@ export default function Dashboard({ user, setUser }) {
             <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-xs font-bold text-white shrink-0">
                {user?.name?.charAt(0).toUpperCase() || 'U'}
             </div>
-            <div className={`flex flex-col overflow-hidden transition-all duration-300 ${isSidebarCollapsed && !isMobileMenuOpen ? 'md:w-0 md:opacity-0' : 'w-auto opacity-100'}`}>
+            <div className={`flex flex-col overflow-hidden transition-all duration-300 ${isSidebarCollapsed ? 'md:w-0 md:opacity-0' : 'w-auto opacity-100'}`}>
                <span className="text-xs font-bold truncate">{user?.name || 'User'}</span>
                <button onClick={handleLogout} className="text-[10px] text-red-500 font-bold mt-1 text-left uppercase hover:underline">Logout</button>
             </div>
@@ -280,9 +278,8 @@ export default function Dashboard({ user, setUser }) {
         </div>
       </aside>
 
-      {/* 3. MAIN CONTENT AREA */}
+      {/* 3. MAIN CONTENT */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Mobile Navbar Header */}
         <header className="md:hidden flex items-center justify-between p-4 bg-white border-b z-50">
           <div className="flex items-center gap-2">
              <Zap size={20} fill="black" />
@@ -294,63 +291,54 @@ export default function Dashboard({ user, setUser }) {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-12 relative scroll-smooth bg-[#FBFBFC]">
-          {/* Dynamic Page Header */}
-          <header className="max-w-6xl mx-auto mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <header className="max-w-6xl mx-auto mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6 text-slate-900">
             <div>
               <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-widest mb-3">
                 <span>Main</span>
                 <ChevronRight size={12} />
                 <span className="text-black">
-                  {location.pathname.includes('vault') ? 'Vault' : (location.pathname.includes('pulse') ? 'Pulse' : 'Engine')}
+                  {location.pathname.includes('vault') ? 'Vault' : (location.pathname.includes('pulse') ? 'Pulse' : (location.pathname.includes('status') ? 'Status' : 'Engine'))}
                 </span>
               </div>
               <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-                {location.pathname.includes('vault') ? 'Archive' : (location.pathname.includes('pulse') ? 'System Pulse' : 'Generator')}
+                {location.pathname.includes('vault') ? 'Archive' : (location.pathname.includes('pulse') ? 'System Pulse' : (location.pathname.includes('status') ? 'Infrastructure' : 'Generator'))}
               </h1>
             </div>
             {bundle && Object.keys(bundle).length > 0 && !isGenerating && location.pathname === "/dashboard" && (
-               <button onClick={handleDownloadAll} className="flex items-center gap-2 bg-black hover:bg-zinc-800 text-white px-8 py-4 rounded-2xl font-bold text-sm shadow-xl transition-all active:scale-95">
-                 <Download size={16} /> Export All Assets
+               <button onClick={handleDownloadAll} className="flex items-center gap-2 bg-black hover:bg-zinc-800 text-white px-8 py-4 rounded-2xl font-bold text-sm shadow-xl transition-all">
+                 <Download size={16} /> Export All
                </button>
             )}
           </header>
 
           <div className="max-w-6xl mx-auto">
              <Routes>
-                {/* GENERATOR DASHBOARD */}
                 <Route path="/" element={
                   <div className="space-y-10">
                     <div className="bg-white rounded-[1.5rem] p-2 border border-gray-100 shadow-sm">
                       <EngineWorkspace onRepurpose={handleRepurpose} isGenerating={isGenerating} cooldown={cooldown} />
                     </div>
                     {isGenerating && <ProgressStepper progress={progress} statusText={statusText} />}
-                    
-                    {/* IMAGE PREVIEW */}
                     {generatedImage && (
                       <div className="max-w-6xl mx-auto mb-10 animate-in fade-in zoom-in duration-500">
                         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden">
                           <div className="aspect-video w-full bg-slate-900 overflow-hidden relative group">
-                            <img src={generatedImage} alt="AI Visual" className="w-full h-full object-cover" />
+                            <img src={generatedImage} alt="Visual" className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
                           </div>
                           <div className="p-6 flex justify-between items-center bg-white border-t">
-                            <button onClick={() => setGeneratedImage(null)} className="px-6 py-3 rounded-2xl border text-xs font-bold hover:bg-gray-50 transition-colors">Clear</button>
+                            <button onClick={() => setGeneratedImage(null)} className="px-6 py-3 rounded-2xl border text-xs font-bold transition-colors">Clear</button>
                             <a href={generatedImage} download="Echoly_Asset.png" className="bg-black text-white px-8 py-3 rounded-2xl font-bold text-sm hover:bg-zinc-800 transition-all">Download PNG</a>
                           </div>
                         </div>
                       </div>
                     )}
-
-                    {/* RESULTS GRID */}
                     {(Object.keys(bundle || {}).length > 0 || isGenerating) && (
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           {Object.entries(bundle || {}).map(([p, c]) => (
                           <ResultCard 
-                            key={p} 
-                            platform={p} 
-                            content={c} 
-                            projectId={currentProjectId} 
-                            fetchHistory={fetchHistory} 
+                            key={p} platform={p} content={c} 
+                            projectId={currentProjectId} fetchHistory={fetchHistory} 
                             isGenerating={isGenerating} 
                             onRegenerate={() => handleSingleRegenerate(p)} 
                             onGenerateImage={() => handleGenerateImage(c)} 
@@ -360,23 +348,17 @@ export default function Dashboard({ user, setUser }) {
                     )}
                   </div>
                 } />
-
-                {/* VAULT ROUTE */}
                 <Route path="/vault" element={
                   <VaultArchive 
                     projects={history} 
                     onRestore={handleRestore} 
                     fetchHistory={fetchHistory} 
                     onDelete={async (id) => { 
-                      try { 
-                        await axios.delete(`${API_BASE}/projects/${id}`, { headers: { 'x-auth-token': localStorage.getItem('token') } }); 
-                        fetchHistory(); 
-                      } catch (e) { alert("Delete failed"); } 
+                      try { await axios.delete(`${API_BASE}/projects/${id}`, { headers: { 'x-auth-token': localStorage.getItem('token') } }); fetchHistory(); } 
+                      catch (e) { alert("Delete failed"); } 
                     }} 
                   />
                 } />
-
-                {/* SYSTEM ROUTES */}
                 <Route path="/settings" element={<SettingsPage user={user} />} />
                 <Route path="/pulse" element={<PulsePage />} />
                 <Route path="/status" element={<StatusPage user={user} />} />
