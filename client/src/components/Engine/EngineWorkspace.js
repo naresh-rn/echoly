@@ -1,24 +1,26 @@
 import React, { useState, useRef } from 'react';
 import { 
   Type, 
-  Link as LinkIcon, 
   Youtube, 
+  Link as LinkIcon, 
   FileAudio, 
-  UploadCloud,  
+  Settings2, 
+  ArrowRight, 
+  UploadCloud, 
   Check, 
-  ArrowRight,
-  Settings2,
-  Sparkles
+  Sparkles 
 } from 'lucide-react';
+import ProgressStepper from './ProgressStepper'; 
 
-export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown }) {
+export default function EngineWorkspace({ onRepurpose, isGenerating, progress, statusText }) {
   const [type, setType] = useState('text');
   const [content, setContent] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [tone, setTone] = useState('Professional');
+  
   const fileInputRef = useRef(null);
 
-  // --- Configuration ---
+  const TONES = ['Professional', 'Viral', 'Educational', 'Stoic', 'Bold', 'Casual'];
   const INPUT_FORMATS = [
     { id: 'text', label: 'Script', icon: Type },
     { id: 'youtube', label: 'YouTube', icon: Youtube },
@@ -26,9 +28,9 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
     { id: 'file', label: 'Upload', icon: FileAudio },
   ];
 
-  const TONES = ['Professional', 'Viral', 'Educational', 'Stoic', 'Bold', 'Casual'];
+  const activeFormat = INPUT_FORMATS.find(f => f.id === type);
+  const ActiveIcon = activeFormat ? activeFormat.icon : Type;
 
-  // --- Handlers ---
   const handleTypeChange = (newType) => {
     setType(newType);
     setContent('');
@@ -36,199 +38,158 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, cooldown })
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) setSelectedFile(e.target.files[0]);
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
   };
 
-  const clearFile = (e) => {
-    e.stopPropagation();
-    setSelectedFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const handleInitialize = () => {
+    const payload = type === 'file' ? selectedFile : content;
+    if (!payload) return; 
+    onRepurpose(type, payload, tone);
   };
 
-  const activeFormat = INPUT_FORMATS.find(f => f.id === type);
+  const isInputReady = type === 'file' ? !!selectedFile : content.trim().length > 0;
+  const isDisabled = isGenerating || !isInputReady;
 
   return (
-    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-xl shadow-gray-200/50 overflow-hidden flex flex-col lg:flex-row">
+    <div className="relative bg-white rounded-2xl border border-slate-200 overflow-hidden">
       
-      {/* ==============================================
-          LEFT PANEL: CONTROLS
-      =============================================== */}
-      <div className="w-full lg:w-[300px] bg-gray-50/50 p-8 border-b lg:border-b-0 lg:border-r border-gray-100 flex flex-col gap-8">
+      {/* MAIN CONTENT AREA */}
+      <div className={`flex flex-col lg:flex-row transition-all duration-500 ${
+        isGenerating ? 'blur-sm opacity-30 pointer-events-none' : 'opacity-100'
+      }`}>
         
-        {/* Header */}
-        <div className="flex items-center gap-3">
-            <div className="p-2 bg-black rounded-xl text-white shadow-lg shadow-black/10">
-                <Settings2 size={18} />
-            </div>
-            <div>
-                <h2 className="text-xs font-black text-black uppercase tracking-widest">Configuration</h2>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Setup Engine</p>
-            </div>
-        </div>
+        {/* LEFT PANEL: CONFIGURATION */}
+        <div className="w-full lg:w-72 bg-slate-50/50 p-6 border-b lg:border-b-0 lg:border-r border-slate-100 flex flex-col gap-6">
+          
+          <div className="flex items-center gap-2.5">
+              <Settings2 size={16} className="text-slate-400" />
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-700">Configuration</h2>
+          </div>
 
-        {/* 1. SOURCE SELECTION */}
-        <div className="space-y-4">
-          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Source Type</label>
-          <div className="grid grid-cols-2 gap-2.5">
-            {INPUT_FORMATS.map((format) => {
-              const Icon = format.icon;
-              const isSelected = type === format.id;
-              return (
-                <button
-                  key={format.id}
-                  onClick={() => handleTypeChange(format.id)}
+          <div className="space-y-3">
+            <label className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">Source DNA</label>
+            <div className="grid grid-cols-2 gap-2">
+              {INPUT_FORMATS.map((f) => (
+                <button 
+                  key={f.id} 
+                  onClick={() => handleTypeChange(f.id)}
                   className={`
-                    group flex flex-col items-center justify-center gap-2 py-4 rounded-2xl border transition-all duration-300
-                    ${isSelected 
-                      ? 'bg-white border-gray-200 text-black shadow-sm ring-2 ring-black/5' 
-                      : 'bg-transparent border-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'}
+                    flex items-center justify-center gap-2 py-3 rounded-lg border text-[11px] font-medium transition-all
+                    ${type === f.id 
+                      ? 'bg-white border-slate-300 text-slate-900 shadow-sm' 
+                      : 'bg-transparent border-transparent text-slate-500 hover:text-slate-700'}
                   `}
                 >
-                  <Icon size={18} strokeWidth={isSelected ? 2.5 : 2} />
-                  <span className="text-[10px] font-bold uppercase tracking-tight">{format.label}</span>
+                  <f.icon size={14} />
+                  {f.label}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* 2. TONE SELECTION */}
-        <div className="space-y-4">
-          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Output Tone</label>
-          <div className="flex flex-wrap gap-2">
-            {TONES.map((t) => {
-              const isSelected = tone === t;
-              return (
-                <button
-                  key={t}
+          <div className="space-y-3">
+            <label className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">Output Tone</label>
+            <div className="flex flex-wrap gap-1.5">
+              {TONES.map((t) => (
+                <button 
+                  key={t} 
                   onClick={() => setTone(t)}
                   className={`
-                    px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border
-                    ${isSelected 
-                      ? 'bg-black border-black text-white shadow-md' 
-                      : 'bg-white border-gray-100 text-gray-400 hover:border-gray-300 hover:text-black'}
+                    px-3 py-1.5 rounded-md text-[11px] font-medium border transition-all
+                    ${tone === t 
+                      ? 'bg-slate-900 border-slate-900 text-white' 
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}
                   `}
                 >
                   {t}
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ==============================================
-          RIGHT PANEL: WORKSPACE
-      =============================================== */}
-      <div className="flex-1 p-8 flex flex-col bg-white">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gray-50 rounded-lg text-gray-400">
-                <activeFormat.icon size={16} />
+              ))}
             </div>
-            <h2 className="text-xs font-black text-black uppercase tracking-widest">Input Area</h2>
           </div>
         </div>
 
-        {/* Dynamic Input Area */}
-        <div className="flex-1 mb-8">
-          {type === 'file' ? (
-            /* FILE DROPZONE */
-            <div 
-              onClick={() => fileInputRef.current?.click()}
-              className={`
-                h-52 w-full border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center cursor-pointer transition-all duration-500 group
-                ${selectedFile 
-                  ? 'border-emerald-500 bg-emerald-50/30' 
-                  : 'border-gray-100 bg-gray-50/30 hover:border-black hover:bg-gray-50'}
-              `}
-            >
-              <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept=".mp3,.mp4,.wav,.m4a" />
-              
-              {selectedFile ? (
-                <div className="text-center animate-in fade-in zoom-in-95 duration-500">
-                  <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-500 text-white rounded-full text-[10px] font-black uppercase mb-3 shadow-lg shadow-emerald-200">
-                    <Check size={12} strokeWidth={3} /> Upload Ready
-                  </div>
-                  <p className="text-black font-bold text-sm truncate max-w-[250px]">{selectedFile.name}</p>
-                  <button onClick={clearFile} className="mt-3 text-[10px] font-black text-gray-400 hover:text-red-500 uppercase tracking-[0.2em] transition-colors">
-                    Remove File
-                  </button>
-                </div>
-              ) : (
-                <div className="text-center">
-                   <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
-                      <UploadCloud size={24} className="text-gray-300 group-hover:text-black transition-colors" />
-                   </div>
-                   <p className="text-[11px] font-black text-black uppercase tracking-widest">Drop audio or video here</p>
-                   <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-tighter">MP3, MP4, WAV, M4A up to 50MB</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* TEXT / URL INPUT */
-            <textarea 
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder={activeFormat?.id === 'text' ? "Enter your script or core ideas here..." : "https://www.youtube.com/watch?v=..."}
-              className="w-full h-52 bg-gray-50/50 hover:bg-gray-50 focus:bg-white text-base font-medium text-gray-800 placeholder-gray-300 resize-none outline-none border border-gray-100 focus:border-gray-200 rounded-[2rem] p-8 transition-all leading-relaxed shadow-inner"
-            />
-          )}
-        </div>
+        {/* RIGHT PANEL: INPUT AREA */}
+        <div className="flex-1 p-6 bg-white flex flex-col relative">
+          
+          <div className="flex items-center gap-2 mb-4">
+            <ActiveIcon size={14} className="text-blue-500" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              {type === 'youtube' ? 'Video URL' : type === 'file' ? 'Upload Media' : 'Content Input'}
+            </h2>
+          </div>
 
-        {/* Action Button */}
-        <div className="relative group">
-            {/* Pulsing glow background for active state */}
-            {!isGenerating && !cooldown && (content || selectedFile) && (
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200 animate-pulse"></div>
-            )}
-            
-            <button 
-                onClick={() => onRepurpose(type, type === 'file' ? selectedFile : content, tone)}
-                disabled={isGenerating || cooldown > 0 || (!content && !selectedFile)}
+          <div className="flex-1 mb-6">
+            {type === 'file' ? (
+              <div 
+                onClick={() => fileInputRef.current?.click()}
                 className={`
-                    relative w-full py-5 rounded-[1.25rem] font-black text-xs uppercase tracking-[0.3em] transition-all duration-500 flex items-center justify-center gap-3
-                    ${(isGenerating || cooldown > 0 || (!content && !selectedFile))
-                    ? 'bg-gray-100 text-gray-300 cursor-not-allowed' 
-                    : 'bg-black text-white hover:bg-zinc-900 hover:translate-y-[-2px] active:translate-y-[0px] shadow-2xl shadow-black/20'}
+                  h-48 w-full border border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all
+                  ${selectedFile 
+                    ? 'border-emerald-200 bg-emerald-50/20' 
+                    : 'border-slate-200 bg-slate-50/30 hover:border-blue-300'}
                 `}
-            >
-                {isGenerating ? (
-                    <div className="flex items-center gap-3">
-                        <span className="animate-pulse">Processing Mission</span>
-                        <div className="flex gap-1">
-                            <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-1 h-1 bg-white rounded-full animate-bounce"></div>
-                        </div>
+              >
+                <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept=".mp3,.mp4,.wav,.m4a" />
+                
+                {selectedFile ? (
+                  <div className="text-center">
+                    <div className="inline-flex items-center gap-1.5 text-emerald-600 text-[10px] font-bold uppercase mb-1">
+                      <Check size={12} strokeWidth={3} /> File Ready
                     </div>
-                ) : cooldown > 0 ? (
-                    <span className="opacity-50 tracking-[0.1em]">Engine Cooldown {cooldown}s</span>
+                    <p className="text-slate-700 font-medium text-sm">{selectedFile.name}</p>
+                  </div>
                 ) : (
-                    <>
-                        <Sparkles size={16} className="text-blue-400" />
-                        Initialize Repurpose
-                        <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                    </>
+                  <div className="text-center">
+                     <UploadCloud size={24} className="text-slate-300 mx-auto mb-2" />
+                     <p className="text-[11px] font-medium text-slate-600">Click to upload media</p>
+                  </div>
                 )}
-            </button>
-        </div>
+              </div>
+            ) : (
+              <textarea 
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={
+                  type === 'youtube' ? "Paste YouTube Link..." :
+                  type === 'blog' ? "Paste Article URL..." :
+                  "Paste your script or notes..."
+                }
+                className="w-full h-full min-h-[200px] bg-slate-50/30 rounded-xl p-5 text-sm font-normal text-slate-700 placeholder-slate-300 resize-none outline-none border border-slate-100 focus:bg-white focus:border-blue-200 transition-all leading-relaxed"
+              />
+            )}
+          </div>
 
-        {/* System Footer Info */}
-        <div className="mt-4 flex justify-center gap-6">
-            <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Neural Link Active</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
-                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">SDXL Visuals Engaged</span>
-            </div>
-        </div>
+          <button 
+            onClick={handleInitialize}
+            disabled={isDisabled}
+            className={`
+              w-full py-4 rounded-xl font-semibold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2
+              ${isDisabled 
+                ? 'bg-slate-100 text-slate-300' 
+                : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.99]'}
+            `}
+          >
+            {type === 'file' ? 'Process Media' : 'Initialize Engine'} 
+            {!isDisabled && <ArrowRight size={14} />}
+          </button>
 
+        </div>
       </div>
+
+      {/* PROGRESS OVERLAY */}
+      {isGenerating && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-50 px-6">
+           <div className="w-full max-w-md p-8 rounded-2xl bg-white border border-slate-100 shadow-xl">
+              <ProgressStepper progress={progress} statusText={statusText} />
+              <div className="mt-6 flex items-center justify-center gap-2 text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400">
+                <Sparkles size={12} className="animate-pulse" />
+                <span>Generating your assets</span>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
