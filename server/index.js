@@ -12,43 +12,40 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Readable } = require('stream');
 const cloudinary = require('cloudinary').v2;
-const { GoogleGenerativeAI } = require("@google/generative-ai"); 
-const { YoutubeTranscript } = require('youtube-transcript');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 require('dotenv').config();
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // --- MODELS ---
 const User = require('./models/User');
 const app = express();
+
 // --- 1. BULLETPROOF CORS SETUP ---
 app.use((req, res, next) => {
-    // List your allowed origins clearly
     const allowedOrigins = [
         "http://localhost:3000",
         "https://echoly-tau.vercel.app"
     ];
-    
+
     const origin = req.headers.origin;
-    
-    // Check if the request's origin is in our allowed list
+
     if (allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
-    
+
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-auth-token, Authorization');
 
-    // Handle Preflight (OPTIONS) immediately with a 204 (No Content)
-    // This stops the request from hitting any logic that might crash
     if (req.method === 'OPTIONS') {
         return res.status(204).end();
     }
-    
+
     next();
 });
 
-// --- 2. BODY PARSERS (Must be below CORS) ---
+// --- 2. BODY PARSERS ---
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -56,27 +53,34 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const tempDir = 'temp_uploads';
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-// Wipe temp folder on server start to ensure a clean state
 const cleanTempFolder = () => {
-    fs.readdirSync(tempDir).forEach(file => fs.unlinkSync(path.join(tempDir, file)));
-    console.log("🧹 Temp Folder Cleansed");
+    fs.readdirSync(tempDir).forEach(file => {
+        try {
+            fs.unlinkSync(path.join(tempDir, file));
+        } catch (err) {
+            console.error(`Error deleting ${file}:`, err);
+        }
+    });
+    console.log("Clarified: 🧹 Temp Folder Cleansed");
 };
 cleanTempFolder();
+
 // --- PROJECT SCHEMA ---
 const ProjectSchema = new mongoose.Schema({
-    userId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User', 
-        required: true 
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
-    title: { 
-        type: String, 
-        required: true 
+    title: {
+        type: String,
+        required: true
     },
     source: {
         type: { type: String, enum: ['YOUTUBE', 'BLOG', 'TEXT', 'FILE'], required: true },
         url: String,
-        rawTranscript: String 
+        publicId: String,
+        rawTranscript: String
     },
     configuration: {
         tone: { type: String, default: 'PROFESSIONAL' },
@@ -94,25 +98,21 @@ const ProjectSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-
-
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
-// Fixed: Define the model as a constant so it's accessible in the routes below
+
 const Project = mongoose.model('Project', ProjectSchema);
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-// Remove: const upload = multer({ dest: 'uploads/' });
-// Replace with:
 const upload = multer({ dest: tempDir + '/' });
 const JWT_SECRET = process.env.JWT_SECRET || 'COMMAND_GRID_SECRET_2026';
 
 // --- DATABASE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/repurposer')
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+    .then(() => console.log('✅ Connected to MongoDB'))
+    .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
 // --- AUTH MIDDLEWARE ---
 const auth = (req, res, next) => {
@@ -129,8 +129,6 @@ const auth = (req, res, next) => {
 };
 
 // --- AUTH ROUTES ---
-// --- AUTH ROUTES ---
-// --- AUTH ROUTES ---
 
 // REGISTER
 app.post('/api/auth/register', async (req, res) => {
@@ -139,22 +137,20 @@ app.post('/api/auth/register', async (req, res) => {
         let user = await User.findOne({ email });
         if (user) return res.status(400).json({ msg: 'User already exists' });
 
-        // DO NOT hash the password here. 
-        // Just pass it to the model. The model's .pre('save') handles it.
         user = new User({ name, email, password });
         await user.save();
 
         const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
-        res.status(200).json({ 
-            token, 
-            user: { id: user._id, email: user.email, name: user.name } 
+        res.status(200).json({
+            token,
+            user: { id: user._id, email: user.email, name: user.name }
         });
     } catch (err) {
-        console.error("DEBUGGING ERROR:", err); // Look at your terminal for this!
-    res.status(500).json({ 
-        msg: 'Server Error', 
-        actualError: err.message // This sends the secret error to your browser console
-    });
+        console.error("DEBUGGING ERROR:", err);
+        res.status(500).json({
+            msg: 'Server Error',
+            actualError: err.message
+        });
     }
 });
 
@@ -175,7 +171,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// VERIFY (The Me Route)
+// VERIFY
 app.get('/api/auth/me', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select('-password');
@@ -184,20 +180,21 @@ app.get('/api/auth/me', auth, async (req, res) => {
         res.status(500).send('Session Expired');
     }
 });
+
 // --- PLATFORM CONFIG ---
 const PLATFORMS_CONFIG = [
-  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook. No markdown " },
-  { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts." },
-  { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script." },
-  { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script." },
-  { id: 'newsletter', prompt: "Newsletter Editor. Subject line + executive summary." },
-  { id: 'blog', prompt: "SEO tech blogger. 400-word draft." },
-  { id: 'threads', prompt: "Conversational Threads influencer." },
-  { id: 'facebook', prompt: "Community Manager. Story-driven post." },
-  { id: 'pinterest', prompt: "Pinterest SEO. Title and Description." },
-  { id: 'youtube', prompt: "YouTube Manager. Community tab update." },
-  { id: 'medium', prompt: "Thought Leadership Writer. Narrative summary." },
-  { id: 'reddit', prompt: "Expert Redditor. Subreddit-ready formatting." }
+    { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook. No markdown" },
+    { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts." },
+    { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script." },
+    { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script." },
+    { id: 'newsletter', prompt: "Newsletter Editor. Subject line + executive summary." },
+    { id: 'blog', prompt: "SEO tech blogger. 400-word draft." },
+    { id: 'threads', prompt: "Conversational Threads influencer." },
+    { id: 'facebook', prompt: "Community Manager. Story-driven post." },
+    { id: 'pinterest', prompt: "Pinterest SEO. Title and Description." },
+    { id: 'youtube', prompt: "YouTube Manager. Community tab update." },
+    { id: 'medium', prompt: "Thought Leadership Writer. Narrative summary." },
+    { id: 'reddit', prompt: "Expert Redditor. Subreddit-ready formatting." }
 ];
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -205,8 +202,6 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // --- AI GENERATION ENGINE ---
 async function generatePlatformText(platformId, text, tone) {
     const config = PLATFORMS_CONFIG.find(p => p.id === platformId);
-    
-    // Attempt the API call with retries
     let attempts = 0;
     const maxAttempts = 3;
 
@@ -214,78 +209,38 @@ async function generatePlatformText(platformId, text, tone) {
         try {
             const completion = await groq.chat.completions.create({
                 messages: [
-                    { 
-                        role: "system", 
-                        content: `${config.prompt} Tone: ${tone}. Be concise.` 
+                    {
+                        role: "system",
+                        content: `${config.prompt} Tone: ${tone}. Be concise.`
                     },
-                    // TRUNCATE MORE AGGRESSIVELY: 1000 chars is usually enough for a social post
-                    { role: "user", content: text.substring(0, 1000) } 
+                    { role: "user", content: text.substring(0, 1000) }
                 ],
-                model: "llama-3.1-8b-instant", 
+                model: "llama-3.1-8b-instant",
             });
-            // --- ADD CLEANING LOGIC HERE ---
+
             let cleanResult = completion.choices[0].message.content;
-
-            // 1. Remove all double asterisks (**)
-            cleanResult = cleanResult.replace(/\*\*/g, '');
-
-            // 2. Remove all header symbols (#, ##, ###, ####)
-            cleanResult = cleanResult.replace(/#+/g, '');
-
+            cleanResult = cleanResult.replace(/\*\*/g, '').replace(/#+/g, '');
             return cleanResult;
         } catch (error) {
             if (error.status === 429 && attempts < maxAttempts - 1) {
                 attempts++;
-                const waitTime = 2000 * attempts; // Wait 2s, then 4s...
+                const waitTime = 2000 * attempts;
                 console.log(`🐢 Rate limit hit. Retrying in ${waitTime}ms...`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
+                await sleep(waitTime);
             } else {
-                throw error; // If not a 429 or out of retries, fail
+                throw error;
             }
         }
     }
 }
-// --- NEW ROUTE: Single Post Regeneration ---
-app.post('/api/repurpose-single', auth, async (req, res) => {
-    try {
-        const { projectId, platformId, tone } = req.body;
-        
-        // 1. Get the original transcript from the project
-        const project = await Project.findOne({ _id: projectId, userId: req.user.id });
-        if (!project) return res.status(404).json({ error: "Project not found" });
 
-        // 2. Generate new content for that specific platform
-        const newContent = await generatePlatformText(platformId.toLowerCase(), project.source.rawTranscript, tone || 'PROFESSIONAL');
-
-        // 3. Update the specific asset in the array
-        const updatedProject = await Project.findOneAndUpdate(
-            { _id: projectId, "assets.platform": platformId.toUpperCase() },
-            { 
-                $set: { 
-                    "assets.$.content": newContent,
-                    "assets.$.generatedAt": new Date()
-                } 
-            },
-            { new: true }
-        );
-
-        res.json({ success: true, content: newContent });
-    } catch (e) {
-        console.error("Regeneration Error:", e);
-        res.status(500).json({ error: "Failed to regenerate post" });
-    }
-});
 // --- PROJECT ENGINE ROUTES ---
-// ... (Your imports remain the same)
 
-// Unified Repurpose Route
 app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => {
-    // 1. SETUP SSE (Server-Sent Events) HEADERS
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Helper to send data chunks to the frontend
     const sendUpdate = (data) => {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
@@ -298,7 +253,7 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 
         sendUpdate({ status: "Initializing Engine...", progress: 5 });
 
-        // --- 2. EXTRACTION LAYER ---
+        // 1. Extraction Layer
         if (req.file) {
             sendUpdate({ status: "Uploading Audio to Cloud...", progress: 10 });
             const ext = path.extname(req.file.originalname);
@@ -306,50 +261,44 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             fs.renameSync(req.file.path, safePath);
 
             const cloudRes = await cloudinary.uploader.upload(safePath, { resource_type: "auto" });
-            
+
             sendUpdate({ status: "Transcribing with AI...", progress: 15 });
             const transcription = await groq.audio.transcriptions.create({
                 file: fs.createReadStream(safePath),
                 model: "whisper-large-v3"
             });
-            
+
             textToProcess = transcription.text;
             cloudUrl = cloudRes.secure_url;
             cloudId = cloudRes.public_id;
             fs.unlinkSync(safePath);
 
         } else if (type === 'youtube') {
-            sendUpdate({ status: "Extracting YouTube Transcript...", progress: 10 });
-            try {
-                // Extracts ID from standard, short, or live links
-                const videoId = content.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1];
-                
-                if (!videoId) throw new Error("Invalid YouTube URL");
+            sendUpdate({ status: "Downloading YouTube Audio...", progress: 10 });
+            const ytPath = path.join(tempDir, `yt-${Date.now()}.mp3`);
+            await yt(content, { extractAudio: true, audioFormat: 'mp3', output: ytPath });
 
-                const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
-                textToProcess = transcriptArr.map(t => t.text).join(' ');
-                cloudUrl = content;
-                
-                sendUpdate({ status: "Transcript Fetched!", progress: 15 });
-            } catch (ytErr) {
-                console.error("YT Error:", ytErr);
-                throw new Error("Could not fetch transcript. Make sure the video has captions/subtitles enabled.");
-            }
+            sendUpdate({ status: "Transcribing Video Content...", progress: 15 });
+            const transcription = await groq.audio.transcriptions.create({
+                file: fs.createReadStream(ytPath),
+                model: "whisper-large-v3"
+            });
+            textToProcess = transcription.text;
+            fs.unlinkSync(ytPath);
+
         } else if (type === 'blog') {
             sendUpdate({ status: "Scraping Blog Content...", progress: 10 });
-            const { data } = await axios.get(content, { 
+            const { data } = await axios.get(content, {
                 timeout: 10000,
-                headers: { 'User-Agent': 'Mozilla/5.0' } 
+                headers: { 'User-Agent': 'Mozilla/5.0' }
             });
             const $ = cheerio.load(data);
-            $('nav, footer, script, style').remove(); // Clean junk
+            $('nav, footer, script, style').remove();
             textToProcess = $('article').text() || $('main').text() || $('body').text();
-
         } else {
             textToProcess = content;
         }
 
-        // --- 3. VALIDATION ---
         if (!textToProcess || textToProcess.length < 10) {
             sendUpdate({ error: "Source content too short." });
             return res.end();
@@ -357,7 +306,6 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 
         sendUpdate({ status: "Source Verified. Starting AI Generation...", progress: 20 });
 
-        // --- 4. SEQUENTIAL GENERATION LOOP ---
         const assetList = [];
         const bundle = {};
 
@@ -365,12 +313,10 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             const p = PLATFORMS_CONFIG[i];
             const currentProgress = 20 + Math.round(((i + 1) / PLATFORMS_CONFIG.length) * 75);
 
-            // Trigger AI Generation for this platform
             const aiResult = await generatePlatformText(p.id, textToProcess, tone);
-            
-            // IMMEDIATE UPDATE: Push this specific card to the frontend right now
-            sendUpdate({ 
-                status: `${p.id.toUpperCase()} Generated!`, 
+
+            sendUpdate({
+                status: `${p.id.toUpperCase()} Generated!`,
                 progress: currentProgress,
                 partialResult: {
                     platform: p.id.toLowerCase(),
@@ -378,40 +324,36 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
                 }
             });
 
-            // Store for final DB save
             assetList.push({ platform: p.id.toUpperCase(), content: aiResult });
             bundle[p.id.toLowerCase()] = aiResult;
 
-            // Optional: Short delay to prevent hitting API rate limits too hard
-            await sleep(2000); 
+            await sleep(1500);
         }
 
-        // --- 5. PERSISTENCE ---
         sendUpdate({ status: "Saving to Vault...", progress: 98 });
         const project = new Project({
             userId: req.user.id,
-            title: req.file ? req.file.originalname : (type === 'text' ? 'Text Draft' : content.substring(0,30)),
-            source: { 
-                type: type.toUpperCase(), 
-                url: req.file ? cloudUrl : content, 
-                publicId: cloudId, 
-                rawTranscript: textToProcess 
+            title: req.file ? req.file.originalname : (type === 'text' ? 'Text Draft' : content.substring(0, 30)),
+            source: {
+                type: type.toUpperCase(),
+                url: req.file ? cloudUrl : content,
+                publicId: cloudId,
+                rawTranscript: textToProcess
             },
             assets: assetList
         });
 
         await project.save();
 
-        // --- 6. FINAL SUCCESS CHUNK ---
-        sendUpdate({ 
-            success: true, 
-            bundle, 
-            projectId: project._id, 
-            progress: 100, 
-            status: "Mission Accomplished" 
+        sendUpdate({
+            success: true,
+            bundle,
+            projectId: project._id,
+            progress: 100,
+            status: "Mission Accomplished"
         });
 
-        res.end(); // Properly close the SSE connection
+        res.end();
 
     } catch (e) {
         console.error("❌ ENGINE FAILURE:", e.message);
@@ -420,6 +362,7 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
     }
 });
 
+// --- DASHBOARD ROUTES ---
 
 app.get('/api/history', auth, async (req, res) => {
     try {
@@ -429,101 +372,112 @@ app.get('/api/history', auth, async (req, res) => {
         res.status(500).json({ msg: "Server Error" });
     }
 });
-// --- 1. FULL PROJECT DELETE (For your Vault) ---
+
 app.delete('/api/projects/:id', auth, async (req, res) => {
     try {
         const project = await Project.findOne({ _id: req.params.id, userId: req.user.id });
         if (!project) return res.status(404).json({ error: "Project not found" });
 
-        // Cleanup Cloudinary
         if (project.source.publicId) {
             await cloudinary.uploader.destroy(project.source.publicId);
         }
 
         await Project.findByIdAndDelete(req.params.id);
         res.json({ success: true, message: "Project wiped." });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// --- 2. SINGLE ASSET DELETE (For your Dashboard Cards) ---
 app.delete('/api/projects/:projectId/asset/:platform', auth, async (req, res) => {
     try {
         const { projectId, platform } = req.params;
         const updatedProject = await Project.findOneAndUpdate(
             { _id: projectId, userId: req.user.id },
-            { $pull: { assets: { platform: platform.toUpperCase() } } }, // Removes only this platform
+            { $pull: { assets: { platform: platform.toUpperCase() } } },
             { new: true }
         );
         res.json({ success: true, assets: updatedProject.assets });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// --- IMAGE PROMPT GENERATOR ---
+// --- IMAGE GENERATION ---
+
 app.post('/api/generate-image-prompt', auth, async (req, res) => {
-  try {
-    const { content } = req.body;
-    const response = await groq.chat.completions.create({
-      messages: [
-        { 
-          role: "system", 
-          content: "You are a professional prompt engineer. Return ONLY a 20-word visual description. DO NOT use quotes, DO NOT use bolding. Just raw text." 
-        },
-        { role: "user", content: `Context: ${content}` }
-      ],
-      model: "llama-3.1-8b-instant",
-    });
+    try {
+        const { content } = req.body;
+        const response = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a professional prompt engineer. Return ONLY a 20-word visual description. DO NOT use quotes, DO NOT use bolding. Just raw text."
+                },
+                { role: "user", content: `Context: ${content}` }
+            ],
+            model: "llama-3.1-8b-instant",
+        });
 
-    let prompt = response.choices[0].message.content.replace(/["'**#]/g, '').replace(/\n/g, ' ').trim();
-    res.json({ prompt });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create prompt" });
-  }
+        let prompt = response.choices[0].message.content.replace(/["'**#]/g, '').replace(/\n/g, ' ').trim();
+        res.json({ prompt });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to create prompt" });
+    }
 });
 
-// --- MAIN IMAGE GENERATOR ---
-// server/index.js
-
-// --- UPDATED: Main Image Generator ---
 app.post('/api/generate-image', auth, async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+    try {
+        const { prompt } = req.body;
+        const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+        const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 
-    // THE BRAIN: Logic changed to produce high-end commercial aesthetic
-    const brainResponse = await groq.chat.completions.create({
-      messages: [
-        { 
-          role: "system", 
-          content: "You are a creative director. Transform the context into a hyper-realistic, 3D commercial render prompt. Style: Frosted glass, soft bokeh, cinematic lighting, 8k, minimalist. DO NOT use words like 'people', 'faces', 'text', 'watermark'." 
-        },
-        { role: "user", content: `Visual Context: ${prompt}` }
-      ],
-      model: "llama-3.1-8b-instant",
-    });
+        if (!ACCOUNT_ID || !API_TOKEN) {
+            return res.status(500).json({ error: "Cloudflare credentials missing." });
+        }
 
-    const visualPrompt = brainResponse.choices[0].message.content.replace(/["']/g, "").substring(0, 1000);
+        const brainResponse = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a tech visual director. Create a 15-word technical 3D scene description. Use words like: frosted glass, glowing cyan, minimalist, 16:9. NO humans, NO text, NO birds."
+                },
+                { role: "user", content: `Context: ${prompt.substring(0, 300)}` }
+            ],
+            model: "llama-3.1-8b-instant",
+        });
 
-    const response = await axios({
-      url: `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
-      method: "POST",
-      headers: { "Authorization": `Bearer ${API_TOKEN}`, "Content-Type": "application/json" },
-      data: { 
-        prompt: visualPrompt,
-        negative_prompt: "text, blurry, low quality, distorted, humans, faces, letters",
-        num_steps: 25,
-        guidance: 7.5
-      },
-      responseType: 'arraybuffer',
-    });
+        const visualPrompt = brainResponse.choices[0].message.content.replace(/["']/g, "");
 
-    const base64Image = Buffer.from(response.data).toString('base64');
-    res.json({ imageData: base64Image, mimeType: "image/png" });
+        const response = await axios({
+            url: `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${API_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            data: JSON.stringify({
+                prompt: visualPrompt,
+                num_steps: 20
+            }),
+            responseType: 'arraybuffer',
+        });
 
-  } catch (error) {
-    console.error("Image Engine Error:", error.message);
-    res.status(500).json({ error: "Visual engine failed to respond." });
-  }
+        const base64Image = Buffer.from(response.data).toString('base64');
+        res.json({
+            imageData: base64Image,
+            mimeType: "image/png"
+        });
+
+    } catch (error) {
+        if (error.response && error.response.data) {
+            const errDesc = Buffer.from(error.response.data).toString();
+            console.error("❌ Cloudflare API Error:", errDesc);
+        } else {
+            console.error("❌ Request Error:", error.message);
+        }
+        res.status(500).json({ error: "Cloudflare failed to generate image." });
+    }
 });
 
 app.delete('/api/history', auth, async (req, res) => {
@@ -535,7 +489,7 @@ app.delete('/api/history', auth, async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 10000; // Render likes 10000
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
 });
