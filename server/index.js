@@ -12,7 +12,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Readable } = require('stream');
 const cloudinary = require('cloudinary').v2;
-const { GoogleGenerativeAI } = require("@google/generative-ai"); //
+const { GoogleGenerativeAI } = require("@google/generative-ai"); 
+const { YoutubeTranscript } = require('youtube-transcript');
 require('dotenv').config();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -244,7 +245,36 @@ async function generatePlatformText(platformId, text, tone) {
         }
     }
 }
+// --- NEW ROUTE: Single Post Regeneration ---
+app.post('/api/repurpose-single', auth, async (req, res) => {
+    try {
+        const { projectId, platformId, tone } = req.body;
+        
+        // 1. Get the original transcript from the project
+        const project = await Project.findOne({ _id: projectId, userId: req.user.id });
+        if (!project) return res.status(404).json({ error: "Project not found" });
 
+        // 2. Generate new content for that specific platform
+        const newContent = await generatePlatformText(platformId.toLowerCase(), project.source.rawTranscript, tone || 'PROFESSIONAL');
+
+        // 3. Update the specific asset in the array
+        const updatedProject = await Project.findOneAndUpdate(
+            { _id: projectId, "assets.platform": platformId.toUpperCase() },
+            { 
+                $set: { 
+                    "assets.$.content": newContent,
+                    "assets.$.generatedAt": new Date()
+                } 
+            },
+            { new: true }
+        );
+
+        res.json({ success: true, content: newContent });
+    } catch (e) {
+        console.error("Regeneration Error:", e);
+        res.status(500).json({ error: "Failed to regenerate post" });
+    }
+});
 // --- PROJECT ENGINE ROUTES ---
 // ... (Your imports remain the same)
 
@@ -289,18 +319,22 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             fs.unlinkSync(safePath);
 
         } else if (type === 'youtube') {
-            sendUpdate({ status: "Downloading YouTube Audio...", progress: 10 });
-            const ytPath = path.join(tempDir, `yt-${Date.now()}.mp3`);
-            await yt(content, { extractAudio: true, audioFormat: 'mp3', output: ytPath });
-            
-            sendUpdate({ status: "Transcribing Video Content...", progress: 15 });
-            const transcription = await groq.audio.transcriptions.create({
-                file: fs.createReadStream(ytPath),
-                model: "whisper-large-v3"
-            });
-            textToProcess = transcription.text;
-            fs.unlinkSync(ytPath);
+            sendUpdate({ status: "Extracting YouTube Transcript...", progress: 10 });
+            try {
+                // Extracts ID from standard, short, or live links
+                const videoId = content.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1];
+                
+                if (!videoId) throw new Error("Invalid YouTube URL");
 
+                const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
+                textToProcess = transcriptArr.map(t => t.text).join(' ');
+                cloudUrl = content;
+                
+                sendUpdate({ status: "Transcript Fetched!", progress: 15 });
+            } catch (ytErr) {
+                console.error("YT Error:", ytErr);
+                throw new Error("Could not fetch transcript. Make sure the video has captions/subtitles enabled.");
+            }
         } else if (type === 'blog') {
             sendUpdate({ status: "Scraping Blog Content...", progress: 10 });
             const { data } = await axios.get(content, { 
@@ -449,66 +483,46 @@ app.post('/api/generate-image-prompt', auth, async (req, res) => {
 // --- MAIN IMAGE GENERATOR ---
 // server/index.js
 
+// --- UPDATED: Main Image Generator ---
 app.post('/api/generate-image', auth, async (req, res) => {
   try {
     const { prompt } = req.body;
-
     const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
     const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 
-    if (!ACCOUNT_ID || !API_TOKEN) {
-      return res.status(500).json({ error: "Cloudflare credentials missing in Render Environment." });
-    }
-
-    // 1. THE BRAIN: Generate a high-quality visual description
+    // THE BRAIN: Logic changed to produce high-end commercial aesthetic
     const brainResponse = await groq.chat.completions.create({
       messages: [
         { 
           role: "system", 
-          content: "You are a tech visual director. Create a 15-word technical 3D scene description. Use words like: frosted glass, glowing cyan, minimalist, 16:9. NO humans, NO text, NO birds." 
+          content: "You are a creative director. Transform the context into a hyper-realistic, 3D commercial render prompt. Style: Frosted glass, soft bokeh, cinematic lighting, 8k, minimalist. DO NOT use words like 'people', 'faces', 'text', 'watermark'." 
         },
-        { role: "user", content: `Context: ${prompt.substring(0, 300)}` }
+        { role: "user", content: `Visual Context: ${prompt}` }
       ],
       model: "llama-3.1-8b-instant",
     });
 
-    // Clean the prompt of any quotes that might break the JSON
-    const visualPrompt = brainResponse.choices[0].message.content.replace(/["']/g, "");
+    const visualPrompt = brainResponse.choices[0].message.content.replace(/["']/g, "").substring(0, 1000);
 
-    // 2. THE ARTIST: Call Cloudflare Workers AI
-    console.log("🚀 Calling Cloudflare SDXL...");
-    
     const response = await axios({
       url: `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      data: JSON.stringify({ 
+      headers: { "Authorization": `Bearer ${API_TOKEN}`, "Content-Type": "application/json" },
+      data: { 
         prompt: visualPrompt,
-        num_steps: 20 
-      }),
-      responseType: 'arraybuffer', // Required to receive image binary
+        negative_prompt: "text, blurry, low quality, distorted, humans, faces, letters",
+        num_steps: 25,
+        guidance: 7.5
+      },
+      responseType: 'arraybuffer',
     });
 
-    // 3. RETURN DATA
     const base64Image = Buffer.from(response.data).toString('base64');
-    res.json({ 
-      imageData: base64Image, 
-      mimeType: "image/png" 
-    });
+    res.json({ imageData: base64Image, mimeType: "image/png" });
 
   } catch (error) {
-    // Detailed error logging for your Render Console
-    if (error.response && error.response.data) {
-        const errDesc = Buffer.from(error.response.data).toString();
-        console.error("❌ Cloudflare API Error:", errDesc);
-    } else {
-        console.error("❌ Request Error:", error.message);
-    }
-    
-    res.status(500).json({ error: "Cloudflare failed to generate image. Check Account ID and Token." });
+    console.error("Image Engine Error:", error.message);
+    res.status(500).json({ error: "Visual engine failed to respond." });
   }
 });
 
