@@ -43,17 +43,35 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, progress, s
     }
   };
 
-  const handleInitialize = () => {
-    const payload = type === 'file' ? selectedFile : content;
-    if (!payload) return; 
+const handleInitialize = () => {
+    // 1. Check if empty
+    if (type !== 'file' && !content.trim()) {
+        alert("Please provide content or a URL.");
+        return;
+    }
+    if (type === 'file' && !selectedFile) {
+        alert("Please select a file first.");
+        return;
+    }
 
-    // Logic Fix: Ensure we pass a fresh state to the parent
-    onRepurpose(type, payload, tone);
-    
-    // Optional: Clear input after starting to prevent double-submitting
-    // setContent(''); 
-    // setSelectedFile(null);
-  };
+    // 2. Simple YouTube Validation
+    if (type === 'youtube') {
+        const isYT = content.includes('youtube.com') || content.includes('youtu.be');
+        if (!isYT) {
+            alert("Please enter a valid YouTube link.");
+            return;
+        }
+    }
+
+    // 3. Simple Blog Validation
+    if (type === 'blog' && !content.startsWith('http')) {
+        alert("Please enter a full URL (starting with http/https).");
+        return;
+    }
+
+    // If all pass, start the engine
+    onRepurpose(type, type === 'file' ? selectedFile : content, tone);
+};
 
   const isInputReady = type === 'file' ? !!selectedFile : content.trim().length > 0;
   const isDisabled = isGenerating || !isInputReady;

@@ -208,15 +208,21 @@ async function generatePlatformText(platformId, text, tone) {
     let attempts = 0;
     const maxAttempts = 3;
 
+    // ADD THIS: Pre-clean the text for the AI
+    const systemPrompt = `
+        ${config.prompt} 
+        Tone: ${tone}. 
+        IMPORTANT: The source text may be from a PDF or Scraper and contain messy artifacts like page numbers, headers, or broken lines. 
+        IGNORE any metadata/headers and focus ONLY on the core message. 
+        Return ONLY the final post. No markdown headers.
+    `;
+
     while (attempts < maxAttempts) {
         try {
             const completion = await groq.chat.completions.create({
                 messages: [
-                    {
-                        role: "system",
-                        content: `${config.prompt} Tone: ${tone}. Be concise.`
-                    },
-                    { role: "user", content: text.substring(0, 1000) }
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: text.substring(0, 4000) } // Increased context window
                 ],
                 model: "llama-3.1-8b-instant",
             });
@@ -252,6 +258,9 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
         res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
+    // Track file path for cleanup in finally block
+    const filePath = req.file ? req.file.path : null;
+
     try {
         const { type, content, tone } = req.body;
         let textToProcess = "";
@@ -260,20 +269,22 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 
         sendUpdate({ status: "Initializing Engine...", progress: 5 });
 
-        // --- 1. IMPROVED EXTRACTION LAYER (The Fix) ---
-        
+        // --- 1. EXTRACTION LAYER ---
         if (req.file) {
             const mimetype = req.file.mimetype;
-            const filePath = req.file.path;
 
             if (mimetype.includes('audio') || mimetype.includes('video')) {
-                sendUpdate({ status: "Uploading Media to Cloud...", progress: 10 });
-                // Cloudinary upload for storage/tracking
-                const cloudRes = await cloudinary.uploader.upload(filePath, { resource_type: "auto" });
+                sendUpdate({ status: "Uploading Media for Analysis...", progress: 10 });
+                
+                // Cloudinary upload (Resource type 'auto' handles audio and video)
+                const cloudRes = await cloudinary.uploader.upload(filePath, { 
+                    resource_type: "auto",
+                    folder: "echoly_media" 
+                });
                 cloudUrl = cloudRes.secure_url;
                 cloudId = cloudRes.public_id;
 
-                sendUpdate({ status: "Transcribing Audio with Whisper...", progress: 15 });
+                sendUpdate({ status: "Transcribing with Whisper AI...", progress: 15 });
                 const transcription = await groq.audio.transcriptions.create({
                     file: fs.createReadStream(filePath),
                     model: "whisper-large-v3"
@@ -281,64 +292,92 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
                 textToProcess = transcription.text;
             } 
             else if (mimetype === 'application/pdf') {
-                sendUpdate({ status: "Extracting Text from PDF...", progress: 15 });
+                sendUpdate({ status: "Parsing PDF Document...", progress: 15 });
                 const dataBuffer = fs.readFileSync(filePath);
                 const pdfData = await pdf(dataBuffer);
                 textToProcess = pdfData.text;
                 cloudUrl = "PDF_DOCUMENT";
             } 
             else {
-                // Handle .txt or doc files
+                // Default for .txt, .doc, etc.
                 sendUpdate({ status: "Reading File Content...", progress: 15 });
                 textToProcess = fs.readFileSync(filePath, 'utf8');
                 cloudUrl = "DOC_FILE";
             }
-            // Cleanup temp file
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        } 
+        else if (type === 'youtube') {
+            sendUpdate({ status: "Extracting YouTube Transcript...", progress: 10 });
+            
+            // 1. Extract Video ID
+            const videoIdMatch = content.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+            const videoId = videoIdMatch ? videoIdMatch[1] : null;
+            if (!videoId) throw new Error("Invalid YouTube URL.");
 
-        
-        } else if (type === 'youtube') {
-            sendUpdate({ status: "Bypassing restrictions... Extracting Transcript", progress: 10 });
             try {
-                // Extract the Video ID using Regex to ensure a clean ID is passed
-                const videoIdMatch = content.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-                const videoId = videoIdMatch ? videoIdMatch[1] : null;
-
-                if (!videoId) throw new Error("Invalid YouTube URL.");
-
-                // Fetch the transcript directly - this avoids the 'Bot' detection of yt-dlp
+                // TRY METHOD A: Scrape Transcript (Fast & Free)
                 const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
                 textToProcess = transcriptArr.map(t => t.text).join(' ');
-
-                if (!textToProcess || textToProcess.length < 50) {
-                    throw new Error("Transcript is too short or unavailable.");
-                }
-
-                sendUpdate({ status: "New content extracted successfully!", progress: 15 });
+                sendUpdate({ status: "Transcript Extracted!", progress: 15 });
             } catch (err) {
-                console.error("Extraction failed:", err.message);
-                // This stops the engine from using 'Old Data' if the new link fails
-                throw new Error("YouTube blocked the request. Please paste the script manually.");
+                // METHOD A FAILED (Captions are disabled) -> FALLBACK TO METHOD B
+                console.log("Method A Failed, initiating Method B (Whisper Fallback)...");
+                sendUpdate({ status: "Captions disabled. Downloading audio for AI transcription...", progress: 12 });
+
+                const audioPath = path.join(tempDir, `yt_${videoId}.mp3`);
+                
+                try {
+                    // Download only the audio using yt-dlp
+                    await yt(content, {
+                        extractAudio: true,
+                        audioFormat: 'mp3',
+                        output: audioPath,
+                        noCheckCertificates: true,
+                    });
+
+                    sendUpdate({ status: "Processing Audio with Whisper...", progress: 15 });
+                    
+                    // Send the downloaded audio to Groq Whisper
+                    const transcription = await groq.audio.transcriptions.create({
+                        file: fs.createReadStream(audioPath),
+                        model: "whisper-large-v3"
+                    });
+                    
+                    textToProcess = transcription.text;
+
+                    // Cleanup the temp audio file
+                    if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+                } catch (fallbackErr) {
+                    console.error("Method B also failed:", fallbackErr.message);
+                    throw new Error("This video is protected or restricted. Please paste the script manually.");
+                }
             }
-        } else if (type === 'blog') {
-            sendUpdate({ status: "Scraping Website...", progress: 10 });
-            const { data } = await axios.get(content, {
-                timeout: 10000,
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-            const $ = cheerio.load(data);
-            $('nav, footer, script, style').remove();
-            textToProcess = $('article').text() || $('main').text() || $('body').text();
-        } else {
+        }
+        else if (type === 'blog') {
+            sendUpdate({ status: "Scraping Article Content...", progress: 10 });
+            try {
+                const { data } = await axios.get(content, {
+                    timeout: 10000,
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+                });
+                const $ = cheerio.load(data);
+                $('nav, footer, script, style, ad, .comments').remove();
+                textToProcess = $('article').text() || $('main').text() || $('body').text();
+                cloudUrl = content;
+            } catch (err) {
+                throw new Error("Failed to scrape the article. The website may be protected.");
+            }
+        } 
+        else {
+            // Manual Text Input
             textToProcess = content;
         }
 
         // --- VALIDATION ---
         if (!textToProcess || textToProcess.trim().length < 10) {
-            throw new Error("Input source resulted in empty or too short text.");
+            throw new Error("The source provided contains no readable text.");
         }
 
-        sendUpdate({ status: "Content Analyzed. Generating Posts...", progress: 20 });
+        sendUpdate({ status: "Content Secured. Beginning AI Synthesis...", progress: 20 });
 
         // --- 2. AI GENERATION LAYER ---
         const assetList = [];
@@ -346,57 +385,89 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 
         for (let i = 0; i < PLATFORMS_CONFIG.length; i++) {
             const p = PLATFORMS_CONFIG[i];
+            // Progress scales from 20% to 95% across all platforms
             const currentProgress = 20 + Math.round(((i + 1) / PLATFORMS_CONFIG.length) * 75);
 
-            const aiResult = await generatePlatformText(p.id, textToProcess, tone);
+            try {
+                const aiResult = await generatePlatformText(p.id, textToProcess, tone);
 
-            sendUpdate({
-                status: `${p.id.toUpperCase()} Generated!`,
-                progress: currentProgress,
-                partialResult: {
-                    platform: p.id.toLowerCase(),
-                    content: aiResult
-                }
-            });
+                sendUpdate({
+                    status: `Generated ${p.id.toUpperCase()} Asset`,
+                    progress: currentProgress,
+                    partialResult: {
+                        platform: p.id.toLowerCase(),
+                        content: aiResult
+                    }
+                });
 
-            assetList.push({ platform: p.id.toUpperCase(), content: aiResult });
-            bundle[p.id.toLowerCase()] = aiResult;
+                assetList.push({ 
+                    platform: p.id.toUpperCase(), 
+                    content: aiResult,
+                    generatedAt: new Date()
+                });
+                bundle[p.id.toLowerCase()] = aiResult;
 
-            // Small delay to prevent Groq Rate Limiting (429)
-            await new Promise(r => setTimeout(r, 1200));
+                // Essential delay to prevent Groq Rate Limit (429) errors
+                await new Promise(r => setTimeout(r, 1200));
+            } catch (genErr) {
+                console.error(`Error generating for ${p.id}:`, genErr.message);
+                // Continue to next platform even if one fails
+            }
         }
 
         // --- 3. FINAL SAVE TO DATABASE ---
-        sendUpdate({ status: "Saving to Vault...", progress: 98 });
+        sendUpdate({ status: "Archiving to Vault...", progress: 98 });
+        
+        const projectTitle = req.file ? req.file.originalname : 
+                           (type === 'text' ? 'Text Draft' : 
+                           (type === 'youtube' || type === 'blog' ? content.split('/').pop().substring(0, 40) : 'Untitled Project'));
+
         const project = new Project({
             userId: req.user.id,
-            title: req.file ? req.file.originalname : (type === 'text' ? 'Text Draft' : content.substring(0, 30)),
+            title: projectTitle || "New Project",
             source: {
                 type: type.toUpperCase(),
                 url: cloudUrl,
                 publicId: cloudId,
                 rawTranscript: textToProcess
             },
-            assets: assetList
+            configuration: {
+                tone: tone.toUpperCase()
+            },
+            assets: assetList,
+            status: 'COMPLETED'
         });
 
         await project.save();
 
+        // Final Success Update
         sendUpdate({
             success: true,
             bundle,
             projectId: project._id,
             rawTranscript: textToProcess,
             progress: 100,
-            status: "Synthesis Complete!"
+            status: "All Assets Ready!"
         });
 
         res.end();
 
     } catch (e) {
         console.error("❌ ENGINE FAILURE:", e.message);
-        sendUpdate({ error: e.message });
+        sendUpdate({ 
+            error: e.message,
+            status: "Engine Stopped"
+        });
         res.end();
+    } finally {
+        // ALWAYS cleanup temp files regardless of success or failure
+        if (filePath && fs.existsSync(filePath)) {
+            try {
+                fs.unlinkSync(filePath);
+            } catch (err) {
+                console.error("Failed to delete temp file:", err);
+            }
+        }
     }
 });
 
@@ -408,6 +479,25 @@ app.get('/api/history', auth, async (req, res) => {
         res.json(history);
     } catch (e) {
         res.status(500).json({ msg: "Server Error" });
+    }
+});
+
+app.put('/api/projects/:projectId/asset', auth, async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { platform, content } = req.body;
+
+        const updatedProject = await Project.findOneAndUpdate(
+            { _id: projectId, userId: req.user.id, "assets.platform": platform.toUpperCase() },
+            { $set: { "assets.$.content": content } },
+            { new: true }
+        );
+
+        if (!updatedProject) return res.status(404).json({ error: "Asset or Project not found" });
+
+        res.json({ success: true, message: "Asset updated successfully" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -531,22 +621,28 @@ app.post('/api/repurpose-single', auth, async (req, res) => {
     try {
         const { projectId, platformId, tone } = req.body;
         
+        // 1. Find the project and ensure it belongs to this user
         const project = await Project.findOne({ _id: projectId, userId: req.user.id });
         if (!project) return res.status(404).json({ error: "Project not found" });
 
-        // Generate just for one platform
-        const newContent = await generatePlatformText(platformId.toLowerCase(), project.source.rawTranscript, tone || 'PROFESSIONAL');
+        // 2. Use the transcript already saved in the database
+        // This is much faster than sending the text from the frontend again
+        const newContent = await generatePlatformText(
+            platformId.toLowerCase(), 
+            project.source.rawTranscript, 
+            tone || 'PROFESSIONAL'
+        );
 
-        // Update specifically that platform in the array
-        const updatedProject = await Project.findOneAndUpdate(
+        // 3. Update specifically that platform in the assets array
+        await Project.findOneAndUpdate(
             { _id: projectId, "assets.platform": platformId.toUpperCase() },
-            { $set: { "assets.$.content": newContent, "assets.$.generatedAt": new Date() } },
-            { new: true }
+            { $set: { "assets.$.content": newContent, "assets.$.generatedAt": new Date() } }
         );
 
         res.json({ success: true, content: newContent });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error("Single Repurpose Error:", e.message);
+        res.status(500).json({ error: "Failed to regenerate asset." });
     }
 });
 

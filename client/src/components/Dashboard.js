@@ -132,21 +132,54 @@ export default function Dashboard({ user, setUser }) {
       }
   };
 
-  // --- 3. ASSET MANAGEMENT ---
   const handleSingleRegenerate = async (platform) => {
-    if (!rawText && !bundle[platform]) return alert("Cannot regenerate without context.");
-    setIsGenerating(true);
-    setStatusText(`Refining ${platform}...`);
-    try {
-        const token = localStorage.getItem('token');
-        const res = await axios.post(`${API_BASE}/repurpose-all`, {
-            type: 'text', content: rawText || bundle[platform], tone: 'PROFESSIONAL' 
-        }, { headers: { 'x-auth-token': token } });
+      // We need the Project ID to know which transcript to use
+      if (!currentProjectId) return alert("Please wait for the project to save first.");
 
-        if (res.data && res.data.bundle) {
-           setBundle(prev => ({ ...prev, [platform]: res.data.bundle[platform] || prev[platform] }));
-        }
-    } catch (e) { alert("Regeneration busy."); } finally { setIsGenerating(false); }
+      setIsGenerating(true);
+      setStatusText(`Refining ${platform.toUpperCase()}...`);
+      
+      try {
+          const token = localStorage.getItem('token');
+          const res = await axios.post(`${API_BASE}/repurpose-single`, {
+              projectId: currentProjectId,
+              platformId: platform, // e.g., 'linkedin'
+              tone: 'Professional'  // You can later make this dynamic
+          }, { 
+              headers: { 'x-auth-token': token } 
+          });
+
+          if (res.data && res.data.content) {
+              // Update ONLY the specific platform in the bundle state
+              setBundle(prev => ({ 
+                  ...prev, 
+                  [platform.toLowerCase()]: res.data.content 
+              }));
+              setStatusText("Asset Refined!");
+          }
+      } catch (e) {
+          console.error("Regeneration Error:", e);
+          alert("Visual Engine is busy. Please try again.");
+      } finally {
+          setIsGenerating(false);
+          // Briefly show success then reset status
+          setTimeout(() => setStatusText("System Ready"), 2000);
+      }
+  };
+
+  const handleUpdateAsset = async (platform, newContent) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE}/projects/${currentProjectId}/asset`, {
+        platform: platform.toUpperCase(),
+        content: newContent
+      }, { headers: { 'x-auth-token': token } });
+      
+      // Update local state so the UI stays in sync
+      setBundle(prev => ({ ...prev, [platform.toLowerCase()]: newContent }));
+    } catch (e) {
+      alert("Failed to save changes to database: " + e.message);
+    }
   };
 
   const handleDeleteAsset = async (platform) => {
@@ -164,17 +197,27 @@ export default function Dashboard({ user, setUser }) {
     } catch (e) { alert("Failed to delete asset: " + e.message); }
   };
 
-  const handleRestore = (project) => {
+// --- Updated handleRestore in Dashboard.js ---
+const handleRestore = (project) => {
     const restoredBundle = {};
     if (project.assets) {
-      project.assets.forEach(asset => { restoredBundle[asset.platform.toLowerCase()] = asset.content; });
-      setRawText(project.source?.rawTranscript || ""); 
+        project.assets.forEach(asset => { 
+            restoredBundle[asset.platform.toLowerCase()] = asset.content; 
+        });
     }
-    setBundle(restoredBundle);
-    bundleRef.current = restoredBundle;
+    
+    // Set the current project ID so 'repurpose-single' knows what project we are on
     setCurrentProjectId(project._id);
+    
+    // Set the bundle to show the cards
+    setBundle(restoredBundle);
+    
+    // Crucial: Set the raw text so we can use it for AI context later
+    setRawText(project.source?.rawTranscript || ""); 
+    
     navigate('/dashboard'); 
-  };
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 
   const handleDownloadAll = () => {
     if (!bundle) return;
@@ -339,6 +382,7 @@ export default function Dashboard({ user, setUser }) {
                             onRegenerate={() => handleSingleRegenerate(p)} 
                             onGenerateImage={() => handleGenerateImage(c)} 
                             onDelete={() => handleDeleteAsset(p)}
+                            onUpdate={handleUpdateAsset}
                           />
                         ))}
                       </div>
