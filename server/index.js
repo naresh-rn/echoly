@@ -296,43 +296,29 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             // Cleanup temp file
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
+        
         } else if (type === 'youtube') {
-            sendUpdate({ status: "Bypassing Captcha... Connecting to Stream", progress: 10 });
-            
-            const videoIdMatch = content.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-            const videoId = videoIdMatch ? videoIdMatch[1] : null;
-            if (!videoId) throw new Error("Invalid YouTube URL");
-
-            const outputPath = path.join(tempDir, `${videoId}.mp3`);
-
+            sendUpdate({ status: "Bypassing restrictions... Extracting Transcript", progress: 10 });
             try {
-                sendUpdate({ status: "Extracting Audio Feed...", progress: 12 });
-                
-                // Use yt-dlp to grab the audio only (bypass scraping)
-                await yt(content, {
-                    extractAudio: true,
-                    audioFormat: 'mp3',
-                    output: outputPath,
-                    noCheckCertificates: true,
-                });
+                // Extract the Video ID using Regex to ensure a clean ID is passed
+                const videoIdMatch = content.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                const videoId = videoIdMatch ? videoIdMatch[1] : null;
 
-                sendUpdate({ status: "AI Transcribing (Whisper)...", progress: 15 });
-                
-                // Use the Groq Whisper engine you already have set up
-                const transcription = await groq.audio.transcriptions.create({
-                    file: fs.createReadStream(outputPath),
-                    model: "whisper-large-v3"
-                });
-                
-                textToProcess = transcription.text;
+                if (!videoId) throw new Error("Invalid YouTube URL.");
 
-                // Cleanup the downloaded audio file
-                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-                
-                cloudUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                // Fetch the transcript directly - this avoids the 'Bot' detection of yt-dlp
+                const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
+                textToProcess = transcriptArr.map(t => t.text).join(' ');
+
+                if (!textToProcess || textToProcess.length < 50) {
+                    throw new Error("Transcript is too short or unavailable.");
+                }
+
+                sendUpdate({ status: "New content extracted successfully!", progress: 15 });
             } catch (err) {
-                console.error("YouTube AI Extraction Error:", err.message);
-                throw new Error("YouTube is blocking standard access. Error: " + err.message);
+                console.error("Extraction failed:", err.message);
+                // This stops the engine from using 'Old Data' if the new link fails
+                throw new Error("YouTube blocked the request. Please paste the script manually.");
             }
         } else if (type === 'blog') {
             sendUpdate({ status: "Scraping Website...", progress: 10 });
