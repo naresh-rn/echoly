@@ -52,6 +52,7 @@ export default function Dashboard({ user, setUser }) {
       setIsGenerating(true);
       setBundle({});
       bundleRef.current = {};
+      setRawText("");
       setGeneratedImage(null);
       setProgress(5);
       setStatusText("Initializing Connection...");
@@ -103,6 +104,8 @@ export default function Dashboard({ user, setUser }) {
                           bundleRef.current = data.bundle;
                       }
                       if (data.projectId) setCurrentProjectId(data.projectId);
+                              if (data.rawTranscript) setRawText(data.rawTranscript); 
+
                   } catch (e) { console.warn("Stream parse warning:", e); }
               }
             }
@@ -113,14 +116,18 @@ export default function Dashboard({ user, setUser }) {
       } finally {
           setProgress(100);
           setStatusText("Finalizing Assets...");
-          setTimeout(async () => {
+          // setTimeout(async () => {
+          //     setIsGenerating(false);
+          //     if (Object.keys(bundleRef.current).length === 0) {
+          //         const latestHistory = await fetchHistory();
+          //         if (latestHistory && latestHistory.length > 0) handleRestore(latestHistory[0]);
+          //     } else {
+          //         fetchHistory();
+          //     }
+          // }, 1000);
+          setTimeout(() => {
               setIsGenerating(false);
-              if (Object.keys(bundleRef.current).length === 0) {
-                  const latestHistory = await fetchHistory();
-                  if (latestHistory && latestHistory.length > 0) handleRestore(latestHistory[0]);
-              } else {
-                  fetchHistory();
-              }
+              fetchHistory(); // Just refresh the list in the background
           }, 1000);
       }
   };

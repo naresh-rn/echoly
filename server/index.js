@@ -13,6 +13,9 @@ const bcrypt = require('bcryptjs');
 const { Readable } = require('stream');
 const cloudinary = require('cloudinary').v2;
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const pdf = require('pdf-parse'); 
+const { YoutubeTranscript } = require('youtube-transcript');
+
 require('dotenv').config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -236,7 +239,11 @@ async function generatePlatformText(platformId, text, tone) {
 
 // --- PROJECT ENGINE ROUTES ---
 
+// 1. Add this at the very top of index.js (after your other requires)
+
+// 2. The Full Route
 app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => {
+    // --- SSE HEADERS FOR REAL-TIME UPDATES ---
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -253,41 +260,67 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 
         sendUpdate({ status: "Initializing Engine...", progress: 5 });
 
-        // 1. Extraction Layer
+        // --- 1. IMPROVED EXTRACTION LAYER (The Fix) ---
+        
         if (req.file) {
-            sendUpdate({ status: "Uploading Audio to Cloud...", progress: 10 });
-            const ext = path.extname(req.file.originalname);
-            const safePath = req.file.path + ext;
-            fs.renameSync(req.file.path, safePath);
+            const mimetype = req.file.mimetype;
+            const filePath = req.file.path;
 
-            const cloudRes = await cloudinary.uploader.upload(safePath, { resource_type: "auto" });
+            if (mimetype.includes('audio') || mimetype.includes('video')) {
+                sendUpdate({ status: "Uploading Media to Cloud...", progress: 10 });
+                // Cloudinary upload for storage/tracking
+                const cloudRes = await cloudinary.uploader.upload(filePath, { resource_type: "auto" });
+                cloudUrl = cloudRes.secure_url;
+                cloudId = cloudRes.public_id;
 
-            sendUpdate({ status: "Transcribing with AI...", progress: 15 });
-            const transcription = await groq.audio.transcriptions.create({
-                file: fs.createReadStream(safePath),
-                model: "whisper-large-v3"
-            });
-
-            textToProcess = transcription.text;
-            cloudUrl = cloudRes.secure_url;
-            cloudId = cloudRes.public_id;
-            fs.unlinkSync(safePath);
+                sendUpdate({ status: "Transcribing Audio with Whisper...", progress: 15 });
+                const transcription = await groq.audio.transcriptions.create({
+                    file: fs.createReadStream(filePath),
+                    model: "whisper-large-v3"
+                });
+                textToProcess = transcription.text;
+            } 
+            else if (mimetype === 'application/pdf') {
+                sendUpdate({ status: "Extracting Text from PDF...", progress: 15 });
+                const dataBuffer = fs.readFileSync(filePath);
+                const pdfData = await pdf(dataBuffer);
+                textToProcess = pdfData.text;
+                cloudUrl = "PDF_DOCUMENT";
+            } 
+            else {
+                // Handle .txt or doc files
+                sendUpdate({ status: "Reading File Content...", progress: 15 });
+                textToProcess = fs.readFileSync(filePath, 'utf8');
+                cloudUrl = "DOC_FILE";
+            }
+            // Cleanup temp file
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
         } else if (type === 'youtube') {
-            sendUpdate({ status: "Downloading YouTube Audio...", progress: 10 });
-            const ytPath = path.join(tempDir, `yt-${Date.now()}.mp3`);
-            await yt(content, { extractAudio: true, audioFormat: 'mp3', output: ytPath });
+            sendUpdate({ status: "Extracting Video ID...", progress: 10 });
+            try {
+                // This Regex handles standard, youtu.be, and shorts links
+                const videoIdMatch = content.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+                const videoId = videoIdMatch ? videoIdMatch[1] : null;
+                
+                if (!videoId) throw new Error("Could not find a valid YouTube Video ID");
 
-            sendUpdate({ status: "Transcribing Video Content...", progress: 15 });
-            const transcription = await groq.audio.transcriptions.create({
-                file: fs.createReadStream(ytPath),
-                model: "whisper-large-v3"
-            });
-            textToProcess = transcription.text;
-            fs.unlinkSync(ytPath);
+                sendUpdate({ status: "Fetching Transcript...", progress: 12 });
+                const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
+                
+                textToProcess = transcriptArr.map(t => t.text).join(' ');
+                
+                if (!textToProcess || textToProcess.length < 50) {
+                    throw new Error("This video doesn't have a transcript available.");
+                }
 
+                cloudUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            } catch (err) {
+                console.error("Extraction Error:", err.message);
+                throw new Error("YouTube Error: " + err.message);
+            }
         } else if (type === 'blog') {
-            sendUpdate({ status: "Scraping Blog Content...", progress: 10 });
+            sendUpdate({ status: "Scraping Website...", progress: 10 });
             const { data } = await axios.get(content, {
                 timeout: 10000,
                 headers: { 'User-Agent': 'Mozilla/5.0' }
@@ -299,13 +332,14 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             textToProcess = content;
         }
 
-        if (!textToProcess || textToProcess.length < 10) {
-            sendUpdate({ error: "Source content too short." });
-            return res.end();
+        // --- VALIDATION ---
+        if (!textToProcess || textToProcess.trim().length < 10) {
+            throw new Error("Input source resulted in empty or too short text.");
         }
 
-        sendUpdate({ status: "Source Verified. Starting AI Generation...", progress: 20 });
+        sendUpdate({ status: "Content Analyzed. Generating Posts...", progress: 20 });
 
+        // --- 2. AI GENERATION LAYER ---
         const assetList = [];
         const bundle = {};
 
@@ -327,16 +361,18 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             assetList.push({ platform: p.id.toUpperCase(), content: aiResult });
             bundle[p.id.toLowerCase()] = aiResult;
 
-            await sleep(1500);
+            // Small delay to prevent Groq Rate Limiting (429)
+            await new Promise(r => setTimeout(r, 1200));
         }
 
+        // --- 3. FINAL SAVE TO DATABASE ---
         sendUpdate({ status: "Saving to Vault...", progress: 98 });
         const project = new Project({
             userId: req.user.id,
             title: req.file ? req.file.originalname : (type === 'text' ? 'Text Draft' : content.substring(0, 30)),
             source: {
                 type: type.toUpperCase(),
-                url: req.file ? cloudUrl : content,
+                url: cloudUrl,
                 publicId: cloudId,
                 rawTranscript: textToProcess
             },
@@ -349,8 +385,9 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             success: true,
             bundle,
             projectId: project._id,
+            rawTranscript: textToProcess,
             progress: 100,
-            status: "Mission Accomplished"
+            status: "Synthesis Complete!"
         });
 
         res.end();
@@ -438,11 +475,11 @@ app.post('/api/generate-image', auth, async (req, res) => {
 
         const brainResponse = await groq.chat.completions.create({
             messages: [
-                {
-                    role: "system",
-                    content: "You are a tech visual director. Create a 15-word technical 3D scene description. Use words like: frosted glass, glowing cyan, minimalist, 16:9. NO humans, NO text, NO birds."
+                { 
+                role: "system", 
+                content: "You are a professional 3D artist. Create a high-end, minimalist technical scene description. Style: Frosted glass, glowing edges, isometric view, 8k render, Unreal Engine 5 aesthetic. NO text, NO people." 
                 },
-                { role: "user", content: `Context: ${prompt.substring(0, 300)}` }
+                { role: "user", content: `Create a visual for this topic: ${prompt.substring(0, 200)}` }
             ],
             model: "llama-3.1-8b-instant",
         });
@@ -486,6 +523,29 @@ app.delete('/api/history', auth, async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false });
+    }
+});
+
+app.post('/api/repurpose-single', auth, async (req, res) => {
+    try {
+        const { projectId, platformId, tone } = req.body;
+        
+        const project = await Project.findOne({ _id: projectId, userId: req.user.id });
+        if (!project) return res.status(404).json({ error: "Project not found" });
+
+        // Generate just for one platform
+        const newContent = await generatePlatformText(platformId.toLowerCase(), project.source.rawTranscript, tone || 'PROFESSIONAL');
+
+        // Update specifically that platform in the array
+        const updatedProject = await Project.findOneAndUpdate(
+            { _id: projectId, "assets.platform": platformId.toUpperCase() },
+            { $set: { "assets.$.content": newContent, "assets.$.generatedAt": new Date() } },
+            { new: true }
+        );
+
+        res.json({ success: true, content: newContent });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 

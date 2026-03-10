@@ -46,7 +46,13 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, progress, s
   const handleInitialize = () => {
     const payload = type === 'file' ? selectedFile : content;
     if (!payload) return; 
+
+    // Logic Fix: Ensure we pass a fresh state to the parent
     onRepurpose(type, payload, tone);
+    
+    // Optional: Clear input after starting to prevent double-submitting
+    // setContent(''); 
+    // setSelectedFile(null);
   };
 
   const isInputReady = type === 'file' ? !!selectedFile : content.trim().length > 0;
