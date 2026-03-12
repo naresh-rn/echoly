@@ -260,8 +260,17 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
     };
 
     // Track file path for cleanup in finally block
-    const filePath = req.file ? req.file.path : null;
+// Track file path for cleanup in finally block
+    let filePath = req.file ? req.file.path : null;
 
+    // ✨ THE FIX: Multer strips file extensions by default. 
+    // We must put the extension back so Groq Whisper AI recognizes the file format!
+    if (req.file && filePath) {
+        const ext = path.extname(req.file.originalname); // grabs '.mp4'
+        const newFilePath = filePath + ext;
+        fs.renameSync(filePath, newFilePath);
+        filePath = newFilePath; // Update the path for Cloudinary and Groq
+    }
     try {
         const { type, content, tone } = req.body;
         let textToProcess = "";
@@ -335,18 +344,22 @@ else if (type === 'youtube') {
                 sendUpdate({ status: "Bypassing YouTube security blocks...", progress: 30 });
                 
                 try {
-                    const audioPath = path.join(tempDir, `${videoId}.mp3`);
+                    // FIX 1: Use .m4a format. Whisper AI accepts it natively, 
+                    // which means we don't need FFmpeg to convert it! Saves massive RAM!
+                    const audioPath = path.join(tempDir, `${videoId}.m4a`);
                     
                     await yt(content, {
-                        extractAudio: true,
-                        audioFormat: 'mp3',
+                        // Safely grab the audio stream, fallback to 'best' if needed
+                        format: 'm4a/bestaudio/best', 
                         output: audioPath,
-                        format: 'worstaudio', 
                         noCheckCertificates: true,
                         noWarnings: true,
-                        ffmpegLocation: ffmpegPath,
-                        // ✨ CRITICAL FIX: This flag bypasses YouTube's bot protection on Render!
-                        extractorArgs: 'youtube:player_client=android'
+                        
+                        // FIX 2: Spoof iOS and Smart TV clients (less strict bot protection)
+                        extractorArgs: 'youtube:player_client=ios,tv,web',
+                        
+                        // FIX 3: Force IPv4 to bypass Render's flagged IPv6 addresses
+                        forceIpv4: true
                     });
 
                     sendUpdate({ status: "Transcribing audio with Whisper AI...", progress: 45 });
@@ -358,6 +371,7 @@ else if (type === 'youtube') {
                     
                     textToProcess = transcription.text;
 
+                    // Cleanup the audio file
                     if (fs.existsSync(audioPath)) {
                         fs.unlinkSync(audioPath);
                     }
@@ -369,7 +383,6 @@ else if (type === 'youtube') {
                     sendUpdate({ status: "Audio transcribed successfully!", progress: 50 });
                 } catch (fallbackErr) {
                     console.error("YouTube Fallback Failed:", fallbackErr.message);
-                    // A much friendlier error message if it still fails
                     throw new Error("YouTube's bot protection is too strong for this specific video. Please download the video locally and use the 'Upload' tab instead!");
                 }
             }
