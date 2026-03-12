@@ -222,7 +222,7 @@ async function generatePlatformText(platformId, text, tone) {
             const completion = await groq.chat.completions.create({
                 messages: [
                     { role: "system", content: systemPrompt },
-                    { role: "user", content: text.substring(0, 4000) } // Increased context window
+                    { role: "user", content: text.substring(0, 8000) } // Increased context window
                 ],
                 model: "llama-3.1-8b-instant",
             });
@@ -305,38 +305,55 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
                 cloudUrl = "DOC_FILE";
             }
         } 
-        else if (type === 'youtube') {
-            sendUpdate({ status: "Extracting YouTube Transcript...", progress: 10 });
+else if (type === 'youtube') {
+            sendUpdate({ status: "Analyzing YouTube URL...", progress: 10 });
             
-            // 1. Extract Video ID
-            const videoIdMatch = content.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-            const videoId = videoIdMatch ? videoIdMatch[1] : null;
-            if (!videoId) throw new Error("Invalid YouTube URL.");
+            // Much more robust regex to catch all YouTube URL formats (Shorts, mobile, live, etc.)
+            const extractVideoId = (url) => {
+                const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+                return match ? match[1] : null;
+            };
+
+            const videoId = extractVideoId(content);
+            if (!videoId) throw new Error("Invalid YouTube URL. Please provide a standard link or Shorts link.");
+
+            cloudUrl = content; 
 
             try {
-                // TRY METHOD A: Scrape Transcript (Fast & Free)
+                sendUpdate({ status: "Extracting official video transcript...", progress: 40 });
+                
+                // METHOD 1: Fast text extraction via captions
                 const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
-                textToProcess = transcriptArr.map(t => t.text).join(' ');
-                sendUpdate({ status: "Transcript Extracted!", progress: 15 });
-            } catch (err) {
-                // METHOD A FAILED (Captions are disabled) -> FALLBACK TO METHOD B
-                console.log("Method A Failed, initiating Method B (Whisper Fallback)...");
-                sendUpdate({ status: "Captions disabled. Downloading audio for AI transcription...", progress: 12 });
+                
+                if (!transcriptArr || transcriptArr.length === 0) {
+                    throw new Error("No captions found.");
+                }
 
-                const audioPath = path.join(tempDir, `yt_${videoId}.mp3`);
+                textToProcess = transcriptArr.map(t => t.text).join(" ").replace(/\s+/g, " ").trim();
+                sendUpdate({ status: "Transcript extracted successfully!", progress: 50 });
+
+            } catch (err) {
+                console.log("YoutubeTranscript failed, initiating yt-dlp audio fallback...");
+                
+                // METHOD 2: Fallback to downloading audio & Whisper transcription
+                sendUpdate({ status: "Captions blocked. Downloading audio for AI transcription...", progress: 30 });
                 
                 try {
-                    // Download only the audio using yt-dlp
+                    const audioPath = path.join(tempDir, `${videoId}.mp3`);
+                    
+                    // Download just the audio, using ffmpeg-static so Render doesn't crash!
                     await yt(content, {
                         extractAudio: true,
                         audioFormat: 'mp3',
                         output: audioPath,
+                        format: 'worstaudio', 
                         noCheckCertificates: true,
+                        noWarnings: true,
+                        ffmpegLocation: ffmpegPath // <--- THIS IS THE MAGIC BULLET FOR RENDER
                     });
 
-                    sendUpdate({ status: "Processing Audio with Whisper...", progress: 15 });
-                    
-                    // Send the downloaded audio to Groq Whisper
+                    sendUpdate({ status: "Transcribing audio with Whisper AI...", progress: 45 });
+                    // Transcribe using Groq Whisper (which you already set up for files)
                     const transcription = await groq.audio.transcriptions.create({
                         file: fs.createReadStream(audioPath),
                         model: "whisper-large-v3"
@@ -344,11 +361,19 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
                     
                     textToProcess = transcription.text;
 
-                    // Cleanup the temp audio file
-                    if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+                    // Cleanup downloaded audio file immediately
+                    if (fs.existsSync(audioPath)) {
+                        fs.unlinkSync(audioPath);
+                    }
+
+                    if (!textToProcess || textToProcess.length < 10) {
+                         throw new Error("Transcription resulted in empty text.");
+                    }
+
+                    sendUpdate({ status: "Audio transcribed successfully!", progress: 50 });
                 } catch (fallbackErr) {
-                    console.error("Method B also failed:", fallbackErr.message);
-                    throw new Error("This video is protected or restricted. Please paste the script manually.");
+                    console.error("YouTube Fallback Failed:", fallbackErr.message);
+                    throw new Error("YouTube blocked this video entirely (it may be private, age-restricted, or extremely long). Please upload an audio file instead.");
                 }
             }
         }
@@ -644,6 +669,37 @@ app.post('/api/repurpose-single', auth, async (req, res) => {
         console.error("Single Repurpose Error:", e.message);
         res.status(500).json({ error: "Failed to regenerate asset." });
     }
+});
+
+const { execSync } = require('child_process');
+const ffmpegPath = require('ffmpeg-static');
+
+app.get('/api/diagnostics', async (req, res) => {
+    const health = {
+        ffmpeg: "Checking...",
+        groq: "Checking...",
+        database: mongoose.connection.readyState === 1 ? "✅ Connected" : "❌ Disconnected"
+    };
+
+    // 1. Test FFmpeg
+    try {
+        // This runs a simple command to check if FFmpeg can execute on Render's Linux servers
+        execSync(`${ffmpegPath} -version`);
+        health.ffmpeg = "✅ Installed and Executable";
+    } catch (err) {
+        health.ffmpeg = `❌ Failed: ${err.message}`;
+    }
+
+    // 2. Test Groq API Key
+    try {
+        // Asks Groq for a list of models to verify the API key is valid
+        await groq.models.list();
+        health.groq = "✅ API Key Valid";
+    } catch (err) {
+        health.groq = `❌ Failed: ${err.message}`;
+    }
+
+    res.json(health);
 });
 
 const PORT = process.env.PORT || 10000;

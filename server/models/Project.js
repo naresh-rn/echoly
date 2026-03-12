@@ -10,18 +10,18 @@ const ProjectSchema = new mongoose.Schema({
         type: String, 
         required: true 
     },
+    // Combined the duplicate source definitions here
     source: {
-        type: { type: String, enum: ['YOUTUBE', 'BLOG', 'TEXT', 'FILE'], required: true },
+        type: { type: String, enum:['YOUTUBE', 'BLOG', 'TEXT', 'FILE'], required: true },
         url: String,
-        rawTranscript: String // The core text extracted before AI processing
+        publicId: String, // Tracks Cloudinary assets
+        rawTranscript: String // Core text extracted before AI processing
     },
-    
     configuration: {
         tone: { type: String, default: 'PROFESSIONAL' },
         language: { type: String, default: 'EN' }
     },
-    // Assets are stored as an array of objects within the Project
-    assets: [
+    assets:[
         {
             platform: String,
             content: String,
@@ -30,13 +30,7 @@ const ProjectSchema = new mongoose.Schema({
         }
     ],
     status: { type: String, default: 'COMPLETED' },
-    createdAt: { type: Date, default: Date.now },
-    source: {
-        type: { type: String },
-        url: { type: String },
-        publicId: { type: String }, // <--- Add this to track Cloudinary assets
-        rawTranscript: { type: String }
-  },
+    createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model('Project', ProjectSchema);

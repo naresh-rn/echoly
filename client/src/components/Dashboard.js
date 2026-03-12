@@ -48,21 +48,18 @@ export default function Dashboard({ user, setUser }) {
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   // --- 2. ENGINE LOGIC ---
-  const handleRepurpose = async (type, content, tone) => {
+const handleRepurpose = async (type, content, tone) => {
       setIsGenerating(true);
       setBundle({});
       bundleRef.current = {};
       setRawText("");
-      setGeneratedImage(null);
       setProgress(5);
       setStatusText("Initializing Connection...");
       
-      if (type === 'text') setRawText(content);
-
       const formData = new FormData();
-      if (type === 'file') formData.append('file', content);
-      else formData.append('content', content);
+      // Ensure the 'type' is exactly 'youtube' for the backend to catch it
       formData.append('type', type);
+      formData.append('content', content); 
       formData.append('tone', tone);
 
       try {
@@ -73,8 +70,6 @@ export default function Dashboard({ user, setUser }) {
               headers: { 'x-auth-token': token }
           });
 
-          if (!response.body) throw new Error("Connection failed");
-
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = ""; 
@@ -82,53 +77,43 @@ export default function Dashboard({ user, setUser }) {
           while (true) {
             const { value, done } = await reader.read();
             if (done) break;
+            
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n\n');
             buffer = lines.pop(); 
 
             for (const line of lines) {
               if (line.trim().startsWith('data: ')) {
+                  let data;
                   try {
-                      const data = JSON.parse(line.replace('data: ', '').trim());
-                      if (data.error) throw new Error(data.error);
-                      if (data.progress) setProgress(data.progress);
-                      if (data.status) setStatusText(data.status);
-                      
-                      if (data.partialResult) {
-                          const { platform, content } = data.partialResult;
-                          bundleRef.current[platform] = content;
-                          setBundle(prev => ({ ...prev, [platform]: content }));
-                      }
-                      if (data.bundle) {
-                          setBundle(data.bundle);
-                          bundleRef.current = data.bundle;
-                      }
-                      if (data.projectId) setCurrentProjectId(data.projectId);
-                              if (data.rawTranscript) setRawText(data.rawTranscript); 
+                      data = JSON.parse(line.replace('data: ', '').trim());
+                  } catch (e) { continue; }
 
-                  } catch (e) { console.warn("Stream parse warning:", e); }
+                  if (data.error) throw new Error(data.error);
+
+                  if (data.progress) setProgress(data.progress);
+                  if (data.status) setStatusText(data.status);
+                  
+                  if (data.partialResult) {
+                      const { platform, content } = data.partialResult;
+                      setBundle(prev => ({ ...prev, [platform]: content }));
+                  }
+                  
+                  // CRITICAL: Catch the transcript and ID when the engine finishes
+                  if (data.projectId) setCurrentProjectId(data.projectId);
+                  if (data.rawTranscript) setRawText(data.rawTranscript);
+                  if (data.bundle) setBundle(data.bundle);
               }
             }
           }
       } catch (e) {
-          setStatusText("Processing Error");
-          alert("Error: " + e.message);
+          setStatusText("Engine Halted");
+          alert("Notice: " + e.message);
       } finally {
           setProgress(100);
-          setStatusText("Finalizing Assets...");
-          // setTimeout(async () => {
-          //     setIsGenerating(false);
-          //     if (Object.keys(bundleRef.current).length === 0) {
-          //         const latestHistory = await fetchHistory();
-          //         if (latestHistory && latestHistory.length > 0) handleRestore(latestHistory[0]);
-          //     } else {
-          //         fetchHistory();
-          //     }
-          // }, 1000);
-          setTimeout(() => {
-              setIsGenerating(false);
-              fetchHistory(); // Just refresh the list in the background
-          }, 1000);
+          setStatusText("System Ready");
+          setIsGenerating(false);
+          fetchHistory();
       }
   };
 
