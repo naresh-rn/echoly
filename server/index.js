@@ -673,7 +673,7 @@ app.post('/api/repurpose-single', auth, async (req, res) => {
 });
 
 const { execSync } = require('child_process');
-const ffmpegPath = require('ffmpeg-static');
+// const ffmpegPath = require('ffmpeg-static');
 
 app.get('/api/diagnostics', async (req, res) => {
     const health = {
