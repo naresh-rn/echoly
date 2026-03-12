@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const Groq = require('groq-sdk');
 const multer = require('multer');
+const ffmpegPath = require('ffmpeg-static');
 const fs = require('fs');
 const path = require('path');
 const yt = require('yt-dlp-exec');
