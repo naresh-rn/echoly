@@ -47,8 +47,7 @@ export default function Dashboard({ user, setUser }) {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  // --- 2. ENGINE LOGIC ---
-const handleRepurpose = async (type, content, tone) => {
+const handleRepurpose = async (type, payload, tone) => {
       setIsGenerating(true);
       setBundle({});
       bundleRef.current = {};
@@ -57,10 +56,15 @@ const handleRepurpose = async (type, content, tone) => {
       setStatusText("Initializing Connection...");
       
       const formData = new FormData();
-      // Ensure the 'type' is exactly 'youtube' for the backend to catch it
       formData.append('type', type);
-      formData.append('content', content); 
       formData.append('tone', tone);
+
+      // ✨ CRITICAL FIX: Tell Multer exactly what is a file and what is text
+      if (type === 'file') {
+          formData.append('file', payload); 
+      } else {
+          formData.append('content', payload); 
+      }
 
       try {
           const token = localStorage.getItem('token');
@@ -99,7 +103,6 @@ const handleRepurpose = async (type, content, tone) => {
                       setBundle(prev => ({ ...prev, [platform]: content }));
                   }
                   
-                  // CRITICAL: Catch the transcript and ID when the engine finishes
                   if (data.projectId) setCurrentProjectId(data.projectId);
                   if (data.rawTranscript) setRawText(data.rawTranscript);
                   if (data.bundle) setBundle(data.bundle);

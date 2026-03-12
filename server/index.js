@@ -309,7 +309,6 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 else if (type === 'youtube') {
             sendUpdate({ status: "Analyzing YouTube URL...", progress: 10 });
             
-            // Much more robust regex to catch all YouTube URL formats (Shorts, mobile, live, etc.)
             const extractVideoId = (url) => {
                 const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
                 return match ? match[1] : null;
@@ -323,9 +322,7 @@ else if (type === 'youtube') {
             try {
                 sendUpdate({ status: "Extracting official video transcript...", progress: 40 });
                 
-                // METHOD 1: Fast text extraction via captions
                 const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
-                
                 if (!transcriptArr || transcriptArr.length === 0) {
                     throw new Error("No captions found.");
                 }
@@ -335,14 +332,11 @@ else if (type === 'youtube') {
 
             } catch (err) {
                 console.log("YoutubeTranscript failed, initiating yt-dlp audio fallback...");
-                
-                // METHOD 2: Fallback to downloading audio & Whisper transcription
-                sendUpdate({ status: "Captions blocked. Downloading audio for AI transcription...", progress: 30 });
+                sendUpdate({ status: "Bypassing YouTube security blocks...", progress: 30 });
                 
                 try {
                     const audioPath = path.join(tempDir, `${videoId}.mp3`);
                     
-                    // Download just the audio, using ffmpeg-static so Render doesn't crash!
                     await yt(content, {
                         extractAudio: true,
                         audioFormat: 'mp3',
@@ -350,11 +344,13 @@ else if (type === 'youtube') {
                         format: 'worstaudio', 
                         noCheckCertificates: true,
                         noWarnings: true,
-                        ffmpegLocation: ffmpegPath // <--- THIS IS THE MAGIC BULLET FOR RENDER
+                        ffmpegLocation: ffmpegPath,
+                        // ✨ CRITICAL FIX: This flag bypasses YouTube's bot protection on Render!
+                        extractorArgs: 'youtube:player_client=android'
                     });
 
                     sendUpdate({ status: "Transcribing audio with Whisper AI...", progress: 45 });
-                    // Transcribe using Groq Whisper (which you already set up for files)
+                    
                     const transcription = await groq.audio.transcriptions.create({
                         file: fs.createReadStream(audioPath),
                         model: "whisper-large-v3"
@@ -362,7 +358,6 @@ else if (type === 'youtube') {
                     
                     textToProcess = transcription.text;
 
-                    // Cleanup downloaded audio file immediately
                     if (fs.existsSync(audioPath)) {
                         fs.unlinkSync(audioPath);
                     }
@@ -374,7 +369,8 @@ else if (type === 'youtube') {
                     sendUpdate({ status: "Audio transcribed successfully!", progress: 50 });
                 } catch (fallbackErr) {
                     console.error("YouTube Fallback Failed:", fallbackErr.message);
-                    throw new Error("YouTube blocked this video entirely (it may be private, age-restricted, or extremely long). Please upload an audio file instead.");
+                    // A much friendlier error message if it still fails
+                    throw new Error("YouTube's bot protection is too strong for this specific video. Please download the video locally and use the 'Upload' tab instead!");
                 }
             }
         }
