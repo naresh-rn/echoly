@@ -27,6 +27,7 @@ export default function Dashboard({ user, setUser }) {
   const [history, setHistory] = useState([]);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [currentProjectId, setCurrentProjectId] = useState(null);
+  const[generatedAssets, setGeneratedAssets] = useState({});
 
   const bundleRef = useRef({});
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:10000") + "/api";
@@ -48,77 +49,102 @@ export default function Dashboard({ user, setUser }) {
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
 const handleRepurpose = async (type, payload, tone) => {
-      setIsGenerating(true);
-      setBundle({});
-      bundleRef.current = {};
-      setRawText("");
-      setProgress(5);
-      setStatusText("Initializing Connection...");
-      
-      const formData = new FormData();
-      formData.append('type', type);
-      formData.append('tone', tone);
+    setIsGenerating(true);
+    setProgress(0);
+    setStatusText("Connecting to Engine...");
+    setGeneratedAssets({}); // Clear previous results
 
-      // ✨ CRITICAL FIX: Tell Multer exactly what is a file and what is text
-      if (type === 'file') {
-          formData.append('file', payload); 
-      } else {
-          formData.append('content', payload); 
-      }
+    try {
+        // 1. Prepare FormData (Crucial for file uploads + mixed data)
+        const formData = new FormData();
+        formData.append('type', type);
+        formData.append('tone', tone);
+        
+        if (type === 'file') {
+            formData.append('file', payload); // payload is the File object
+        } else {
+            formData.append('content', payload); // payload is URL or Text
+        }
 
-      try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API_BASE}/repurpose-all`, {
-              method: 'POST',
-              body: formData,
-              headers: { 'x-auth-token': token }
-          });
+        // 2. Fetch using POST, but handle it as a Stream
+        const response = await fetch(`${API_BASE}/repurpose-all`, {
+            method: 'POST',
+            headers: {
+                // DO NOT set 'Content-Type': 'multipart/form-data', fetch handles it automatically!
+                'x-auth-token': localStorage.getItem('token')
+            },
+            body: formData
+        });
 
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = ""; 
+        if (!response.ok) throw new Error("Failed to connect to engine.");
 
-          while (true) {
-            const { value, done } = await reader.read();
+        // 3. Setup Stream Reader
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
             if (done) break;
-            
+
+            // Decode the stream chunk
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop(); 
+            
+            // SSE chunks are separated by newlines
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // Keep incomplete lines in the buffer for the next chunk
 
             for (const line of lines) {
-              if (line.trim().startsWith('data: ')) {
-                  let data;
-                  try {
-                      data = JSON.parse(line.replace('data: ', '').trim());
-                  } catch (e) { continue; }
+                if (line.startsWith('data: ')) {
+                    const jsonStr = line.replace('data: ', '').trim();
+                    if (!jsonStr) continue;
 
-                  if (data.error) throw new Error(data.error);
+                    try {
+                        const parsed = JSON.parse(jsonStr);
 
-                  if (data.progress) setProgress(data.progress);
-                  if (data.status) setStatusText(data.status);
-                  
-                  if (data.partialResult) {
-                      const { platform, content } = data.partialResult;
-                      setBundle(prev => ({ ...prev, [platform]: content }));
-                  }
-                  
-                  if (data.projectId) setCurrentProjectId(data.projectId);
-                  if (data.rawTranscript) setRawText(data.rawTranscript);
-                  if (data.bundle) setBundle(data.bundle);
-              }
+                        // --- UPDATE FRONTEND UI IN REAL TIME ---
+                        
+                        if (parsed.status) setStatusText(parsed.status);
+                        if (parsed.progress) setProgress(parsed.progress);
+
+                        // If a single platform finished, we can optionally show it immediately!
+                        if (parsed.partialResult) {
+                            setGeneratedAssets(prev => ({
+                                ...prev,[parsed.partialResult.platform]: parsed.partialResult.content
+                            }));
+                        }
+
+                        // If an error occurred mid-stream
+                        if (parsed.error) {
+                            alert(`Engine Error: ${parsed.error}`);
+                            setIsGenerating(false);
+                            return;
+                        }
+
+                        // Complete!
+                        if (parsed.success) {
+                            // Update your Vault/History state if needed
+                            fetchHistory(); // Assuming you have a function to refresh the vault
+                            
+                            // Delay slightly before removing the progress overlay for a smooth UI feel
+                            setTimeout(() => {
+                                setIsGenerating(false);
+                                setProgress(0);
+                            }, 1000);
+                        }
+
+                    } catch (err) {
+                        console.error("Error parsing stream chunk", err);
+                    }
+                }
             }
-          }
-      } catch (e) {
-          setStatusText("Engine Halted");
-          alert("Notice: " + e.message);
-      } finally {
-          setProgress(100);
-          setStatusText("System Ready");
-          setIsGenerating(false);
-          fetchHistory();
-      }
-  };
+        }
+    } catch (error) {
+        console.error("Process Failed:", error);
+        alert("Failed to process content.");
+        setIsGenerating(false);
+    }
+};
 
   const handleSingleRegenerate = async (platform) => {
       // We need the Project ID to know which transcript to use

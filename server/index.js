@@ -249,8 +249,9 @@ async function generatePlatformText(platformId, text, tone) {
 // 1. Add this at the very top of index.js (after your other requires)
 
 // 2. The Full Route
+// --- THE REWRITTEN REPURPOSE ENGINE ---
 app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => {
-    // --- SSE HEADERS FOR REAL-TIME UPDATES ---
+    // --- 1. SETUP SSE HEADERS FOR REAL-TIME UPDATES ---
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -259,18 +260,15 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
         res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    // Track file path for cleanup in finally block
-// Track file path for cleanup in finally block
     let filePath = req.file ? req.file.path : null;
+    let isClientDisconnected = false;
 
-    // ✨ THE FIX: Multer strips file extensions by default. 
-    // We must put the extension back so Groq Whisper AI recognizes the file format!
-    if (req.file && filePath) {
-        const ext = path.extname(req.file.originalname); // grabs '.mp4'
-        const newFilePath = filePath + ext;
-        fs.renameSync(filePath, newFilePath);
-        filePath = newFilePath; // Update the path for Cloudinary and Groq
-    }
+    // ✨ NEW: Stop processing if the user closes the browser tab!
+    req.on('close', () => {
+        isClientDisconnected = true;
+        console.log('⚠️ Client disconnected early. Stopping engine...');
+    });
+
     try {
         const { type, content, tone } = req.body;
         let textToProcess = "";
@@ -279,14 +277,24 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
 
         sendUpdate({ status: "Initializing Engine...", progress: 5 });
 
-        // --- 1. EXTRACTION LAYER ---
-        if (req.file) {
+        // --- 2. FIX FILE EXTENSION FOR WHISPER ---
+        // Multer strips file extensions. We must put them back so Groq recognizes audio/video!
+        if (req.file && filePath) {
+            const ext = path.extname(req.file.originalname);
+            if (ext) {
+                const newFilePath = filePath + ext;
+                fs.renameSync(filePath, newFilePath);
+                filePath = newFilePath; 
+            }
+        }
+
+        // --- 3. EXTRACTION LAYER ---
+        if (type === 'file' && req.file) {
             const mimetype = req.file.mimetype;
 
             if (mimetype.includes('audio') || mimetype.includes('video')) {
                 sendUpdate({ status: "Uploading Media for Analysis...", progress: 10 });
                 
-                // Cloudinary upload (Resource type 'auto' handles audio and video)
                 const cloudRes = await cloudinary.uploader.upload(filePath, { 
                     resource_type: "auto",
                     folder: "echoly_media" 
@@ -309,13 +317,12 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
                 cloudUrl = "PDF_DOCUMENT";
             } 
             else {
-                // Default for .txt, .doc, etc.
                 sendUpdate({ status: "Reading File Content...", progress: 15 });
                 textToProcess = fs.readFileSync(filePath, 'utf8');
                 cloudUrl = "DOC_FILE";
             }
         } 
-else if (type === 'youtube') {
+        else if (type === 'youtube') {
             sendUpdate({ status: "Analyzing YouTube URL...", progress: 10 });
             
             const extractVideoId = (url) => {
@@ -324,18 +331,16 @@ else if (type === 'youtube') {
             };
 
             const videoId = extractVideoId(content);
-            if (!videoId) throw new Error("Invalid YouTube URL. Please provide a standard link or Shorts link.");
+            if (!videoId) throw new Error("Invalid YouTube URL provided.");
 
             cloudUrl = content; 
 
             try {
                 sendUpdate({ status: "Extracting official video transcript...", progress: 40 });
-                
                 const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
-                if (!transcriptArr || transcriptArr.length === 0) {
-                    throw new Error("No captions found.");
-                }
-
+                
+                if (!transcriptArr || transcriptArr.length === 0) throw new Error("No captions found.");
+                
                 textToProcess = transcriptArr.map(t => t.text).join(" ").replace(/\s+/g, " ").trim();
                 sendUpdate({ status: "Transcript extracted successfully!", progress: 50 });
 
@@ -343,47 +348,31 @@ else if (type === 'youtube') {
                 console.log("YoutubeTranscript failed, initiating yt-dlp audio fallback...");
                 sendUpdate({ status: "Bypassing YouTube security blocks...", progress: 30 });
                 
+                const audioPath = path.join(tempDir, `${videoId}.m4a`);
                 try {
-                    // FIX 1: Use .m4a format. Whisper AI accepts it natively, 
-                    // which means we don't need FFmpeg to convert it! Saves massive RAM!
-                    const audioPath = path.join(tempDir, `${videoId}.m4a`);
-                    
                     await yt(content, {
-                        // Safely grab the audio stream, fallback to 'best' if needed
                         format: 'm4a/bestaudio/best', 
                         output: audioPath,
                         noCheckCertificates: true,
                         noWarnings: true,
-                        
-                        // FIX 2: Spoof iOS and Smart TV clients (less strict bot protection)
                         extractorArgs: 'youtube:player_client=ios,tv,web',
-                        
-                        // FIX 3: Force IPv4 to bypass Render's flagged IPv6 addresses
                         forceIpv4: true
                     });
 
                     sendUpdate({ status: "Transcribing audio with Whisper AI...", progress: 45 });
-                    
                     const transcription = await groq.audio.transcriptions.create({
                         file: fs.createReadStream(audioPath),
                         model: "whisper-large-v3"
                     });
                     
                     textToProcess = transcription.text;
-
-                    // Cleanup the audio file
-                    if (fs.existsSync(audioPath)) {
-                        fs.unlinkSync(audioPath);
-                    }
-
-                    if (!textToProcess || textToProcess.length < 10) {
-                         throw new Error("Transcription resulted in empty text.");
-                    }
-
                     sendUpdate({ status: "Audio transcribed successfully!", progress: 50 });
                 } catch (fallbackErr) {
                     console.error("YouTube Fallback Failed:", fallbackErr.message);
-                    throw new Error("YouTube's bot protection is too strong for this specific video. Please download the video locally and use the 'Upload' tab instead!");
+                    throw new Error("YouTube blocked this video. Download it locally and use 'Upload' instead.");
+                } finally {
+                    // Always clean up the youtube audio temp file
+                    if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
                 }
             }
         }
@@ -392,39 +381,46 @@ else if (type === 'youtube') {
             try {
                 const { data } = await axios.get(content, {
                     timeout: 10000,
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+                    // Looks like a real browser to bypass basic bot-blockers
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
                 });
                 const $ = cheerio.load(data);
-                $('nav, footer, script, style, ad, .comments').remove();
+                // Clean out noise headers/footers
+                $('nav, footer, script, style, ad, .comments, header, aside').remove();
+                
                 textToProcess = $('article').text() || $('main').text() || $('body').text();
+                // Strip massive whitespace gaps
+                textToProcess = textToProcess.replace(/\s+/g, ' ').trim();
                 cloudUrl = content;
             } catch (err) {
-                throw new Error("Failed to scrape the article. The website may be protected.");
+                throw new Error("Failed to scrape article. The website might be protected against bots.");
             }
         } 
         else {
-            // Manual Text Input
-            textToProcess = content;
+            textToProcess = content; // pure text input
         }
 
-        // --- VALIDATION ---
+        if (isClientDisconnected) return;
+
+        // --- 4. VALIDATION ---
         if (!textToProcess || textToProcess.trim().length < 10) {
-            throw new Error("The source provided contains no readable text.");
+            throw new Error("The source provided contains no readable text or is too short.");
         }
 
         sendUpdate({ status: "Content Secured. Beginning AI Synthesis...", progress: 20 });
 
-        // --- 2. AI GENERATION LAYER ---
-        const assetList = [];
+        // --- 5. AI GENERATION LAYER ---
+        const assetList =[];
         const bundle = {};
 
         for (let i = 0; i < PLATFORMS_CONFIG.length; i++) {
+            if (isClientDisconnected) break;
+
             const p = PLATFORMS_CONFIG[i];
-            // Progress scales from 20% to 95% across all platforms
             const currentProgress = 20 + Math.round(((i + 1) / PLATFORMS_CONFIG.length) * 75);
 
             try {
-                const aiResult = await generatePlatformText(p.id, textToProcess, tone);
+                const aiResult = await generatePlatformText(p.id, textToProcess, tone || 'PROFESSIONAL');
 
                 sendUpdate({
                     status: `Generated ${p.id.toUpperCase()} Asset`,
@@ -442,32 +438,45 @@ else if (type === 'youtube') {
                 });
                 bundle[p.id.toLowerCase()] = aiResult;
 
-                // Essential delay to prevent Groq Rate Limit (429) errors
-                await new Promise(r => setTimeout(r, 1200));
+                // Crucial delay to prevent hitting Groq's TPS (Tokens Per Second) rate limit
+                await sleep(1500); 
             } catch (genErr) {
                 console.error(`Error generating for ${p.id}:`, genErr.message);
-                // Continue to next platform even if one fails
+                // Keep trying the next platform even if one fails
             }
         }
 
-        // --- 3. FINAL SAVE TO DATABASE ---
+        if (isClientDisconnected) return;
+
+        // --- 6. FINAL SAVE TO DATABASE ---
         sendUpdate({ status: "Archiving to Vault...", progress: 98 });
         
-        const projectTitle = req.file ? req.file.originalname : 
-                           (type === 'text' ? 'Text Draft' : 
-                           (type === 'youtube' || type === 'blog' ? content.split('/').pop().substring(0, 40) : 'Untitled Project'));
+        // Generate a clean title for the Vault History
+        let projectTitle = "New Mission";
+        if (req.file) {
+            projectTitle = req.file.originalname;
+        } else if (type === 'text') {
+            projectTitle = textToProcess.substring(0, 35) + '...';
+        } else if (type === 'youtube' || type === 'blog') {
+            try {
+                // Extracts the end of the URL to use as a title (e.g., "my-awesome-video")
+                projectTitle = new URL(content).pathname.split('/').filter(Boolean).pop().replace(/-/g, ' ').substring(0, 45) || 'Web Content';
+            } catch(e) {
+                projectTitle = 'Web Content';
+            }
+        }
 
         const project = new Project({
             userId: req.user.id,
-            title: projectTitle || "New Project",
+            title: projectTitle,
             source: {
-                type: type.toUpperCase(),
+                type: (type || 'TEXT').toUpperCase(),
                 url: cloudUrl,
                 publicId: cloudId,
                 rawTranscript: textToProcess
             },
             configuration: {
-                tone: tone.toUpperCase()
+                tone: (tone || 'PROFESSIONAL').toUpperCase()
             },
             assets: assetList,
             status: 'COMPLETED'
@@ -475,7 +484,7 @@ else if (type === 'youtube') {
 
         await project.save();
 
-        // Final Success Update
+        // --- 7. CLOSE STREAM SUCCESSFULLY ---
         sendUpdate({
             success: true,
             bundle,
@@ -489,13 +498,15 @@ else if (type === 'youtube') {
 
     } catch (e) {
         console.error("❌ ENGINE FAILURE:", e.message);
-        sendUpdate({ 
-            error: e.message,
-            status: "Engine Stopped"
-        });
-        res.end();
+        if (!isClientDisconnected) {
+            sendUpdate({ 
+                error: e.message,
+                status: "Engine Stopped"
+            });
+            res.end();
+        }
     } finally {
-        // ALWAYS cleanup temp files regardless of success or failure
+        // ALWAYS cleanup temp server file regardless of success or failure
         if (filePath && fs.existsSync(filePath)) {
             try {
                 fs.unlinkSync(filePath);
@@ -505,7 +516,6 @@ else if (type === 'youtube') {
         }
     }
 });
-
 // --- DASHBOARD ROUTES ---
 
 app.get('/api/history', auth, async (req, res) => {
