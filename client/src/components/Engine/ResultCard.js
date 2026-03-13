@@ -18,8 +18,7 @@ export default function ResultCard({
   isGenerating, 
   onRegenerate, 
   onGenerateImage,
-  onDelete,
-  onUpdate 
+  onDelete 
 }) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -29,16 +28,6 @@ export default function ResultCard({
   useEffect(() => {
     setLocalContent(content);
   }, [content]);
-
-  const handleToggleEdit = () => {
-    if (isEditing) {
-      // If we are currently in Edit mode and the user clicks 'Save'
-      if (onUpdate) {
-        onUpdate(platform, localContent);
-      }
-    }
-    setIsEditing(!isEditing);
-  };
 
   // --- HANDLERS ---
   const handleCopy = async () => {
@@ -103,7 +92,7 @@ export default function ResultCard({
         {/* Minimal Toolbar */}
         <div className="flex items-center gap-1">
           <button 
-            onClick={handleToggleEdit} // <--- Change this line
+            onClick={() => setIsEditing(!isEditing)}
             disabled={isGenerating}
             className={`p-1.5 rounded-md transition-colors ${isEditing ? 'bg-blue-50 text-blue-600' : 'text-gray-300 hover:text-slate-900 hover:bg-gray-50'}`}
             title={isEditing ? "Save" : "Edit"}
