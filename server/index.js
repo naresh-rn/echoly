@@ -288,20 +288,34 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             cloudId = cloudRes.public_id;
             fs.unlinkSync(safePath);
 
-        } else if (type === 'youtube') {
-            sendUpdate({ status: "Downloading YouTube Audio...", progress: 10 });
-            const ytPath = path.join(tempDir, `yt-${Date.now()}.mp3`);
-            await yt(content, { extractAudio: true, audioFormat: 'mp3', output: ytPath });
-            
-            sendUpdate({ status: "Transcribing Video Content...", progress: 15 });
-            const transcription = await groq.audio.transcriptions.create({
-                file: fs.createReadStream(ytPath),
-                model: "whisper-large-v3"
-            });
-            textToProcess = transcription.text;
-            fs.unlinkSync(ytPath);
+        }else if (type === 'youtube') {
 
-        } else if (type === 'blog') {
+    sendUpdate({ status: "Downloading YouTube Audio...", progress: 10 });
+
+    const ytPath = path.join(tempDir, `yt-${Date.now()}.mp3`);
+
+    await yt(content, {
+        extractAudio: true,
+        audioFormat: "mp3",
+        format: "bestaudio",
+        output: ytPath
+    });
+
+    if (!fs.existsSync(ytPath)) {
+        throw new Error("YouTube download failed.");
+    }
+
+    sendUpdate({ status: "Transcribing Video Content...", progress: 15 });
+
+    const transcription = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(ytPath),
+        model: "whisper-large-v3"
+    });
+
+    textToProcess = transcription.text;
+
+    fs.unlinkSync(ytPath);
+} else if (type === 'blog') {
             sendUpdate({ status: "Scraping Blog Content...", progress: 10 });
             const { data } = await axios.get(content, { 
                 timeout: 10000,
