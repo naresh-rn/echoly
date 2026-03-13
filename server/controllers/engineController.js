@@ -180,8 +180,8 @@ const getImagePrompt = async (req, res) => {
 
 const makeImage = async (req, res) => {
     try {
-        const { prompt, title } = req.body;
-        const imgData = await generateImage(prompt, title);
+        const { prompt } = req.body;
+        const imgData = await generateImage(prompt);
         res.json(imgData);
     } catch (error) {
         res.status(500).json({ error: "Cloudflare failed to generate image." });

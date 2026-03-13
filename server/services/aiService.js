@@ -87,7 +87,7 @@ async function generateImagePrompt(content) {
     return response.choices[0].message.content.replace(/["'**#]/g, '').replace(/\n/g, ' ').trim();
 }
 
-async function generateImage(prompt, title = "") {
+async function generateImage(prompt) {
     if (process.env.CLOUDFLARE_API_TOKEN && process.env.CLOUDFLARE_API_TOKEN.includes('dummy')) {
         const dummyImage = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
         return { imageData: dummyImage, mimeType: "image/png" };
@@ -100,15 +100,13 @@ async function generateImage(prompt, title = "") {
         throw new Error("Cloudflare credentials missing.");
     }
 
-    const contextText = title ? `Project Theme: ${title}. Content Context: ${prompt.substring(0, 300)}` : prompt.substring(0, 400);
-
     const brainResponse = await groq.chat.completions.create({
         messages: [
             { 
             role: "system", 
             content: "You are a professional 3D artist. Create a high-end, minimalist technical scene description. Style: Frosted glass, glowing edges, isometric view, 8k render, Unreal Engine 5 aesthetic. NO text, NO people." 
             },
-            { role: "user", content: `Create a visual for this: ${contextText}` }
+            { role: "user", content: `Create a visual for this topic: ${prompt.substring(0, 200)}` }
         ],
         model: "llama-3.1-8b-instant",
     });

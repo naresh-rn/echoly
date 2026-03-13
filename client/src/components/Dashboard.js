@@ -28,7 +28,7 @@ export default function Dashboard({ user, setUser }) {
   const [history, setHistory] = useState([]);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [currentProjectId, setCurrentProjectId] = useState(null);
-  const [currentProjectTitle, setCurrentProjectTitle] = useState("");
+  const [currentTitle, setCurrentTitle] = useState("");
 
   const bundleRef = useRef({});
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:10000") + "/api";
@@ -53,13 +53,13 @@ export default function Dashboard({ user, setUser }) {
   // --- 2. ENGINE LOGIC ---
   const handleRepurpose = async (type, content, tone, includeHashtags, title) => {
       setIsGenerating(true);
+      setCurrentTitle(title);
       setBundle({});
       bundleRef.current = {};
       setRawText("");
       setGeneratedImage(null);
       setProgress(5);
       setStatusText("Initializing Connection...");
-      setCurrentProjectTitle(title);
       
       if (type === 'text') setRawText(content);
 
@@ -131,9 +131,14 @@ export default function Dashboard({ user, setUser }) {
           //         fetchHistory();
           //     }
           // }, 1000);
-          setTimeout(() => {
+          setTimeout(async () => {
               setIsGenerating(false);
-              fetchHistory(); // Just refresh the list in the background
+              fetchHistory();
+              
+              // Automatically trigger image generation if we have a title
+              if (title && title.trim()) {
+                  handleGenerateImage(title);
+              }
           }, 1000);
       }
   };
@@ -215,7 +220,7 @@ const handleRestore = (project) => {
     
     // Set the current project ID so 'repurpose-single' knows what project we are on
     setCurrentProjectId(project._id);
-    setCurrentProjectTitle(project.title || "");
+    setCurrentTitle(project.title || "");
     
     // Set the bundle to show the cards
     setBundle(restoredBundle);
@@ -241,15 +246,15 @@ const handleRestore = (project) => {
   };
 
   const handleGenerateImage = async (content) => {
-    if (!content) return;
+    // Priority: 1. Project Title, 2. Provided Content
+    const imagePrompt = (currentTitle && currentTitle.trim()) || content;
+    if (!imagePrompt) return;
+    
     try {
       setIsGenerating(true);
       setStatusText("Generating Visuals...");
       const token = localStorage.getItem('token');
-      const res = await axios.post(`${API_BASE}/generate-image`, { 
-          prompt: content,
-          title: currentProjectTitle 
-      }, { headers: { 'x-auth-token': token } });
+      const res = await axios.post(`${API_BASE}/generate-image`, { prompt: imagePrompt }, { headers: { 'x-auth-token': token } });
       setGeneratedImage(`data:${res.data.mimeType};base64,${res.data.imageData}`);
     } catch (error) { alert("Visual Engine is busy."); } finally { setIsGenerating(false); }
   };
