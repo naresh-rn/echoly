@@ -38,7 +38,7 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
     }
 
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Credentials', 'true'); 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-auth-token, Authorization');
 
@@ -323,60 +323,48 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
             }
         } 
         else if (type === 'youtube') {
-            sendUpdate({ status: "Analyzing YouTube URL...", progress: 10 });
+            sendUpdate({ status: "Connecting to YouTube Engine...", progress: 10 });
+            const videoId = content.split('v=')[1]?.split('&')[0] || content.split('/').pop();
             
-            const extractVideoId = (url) => {
-                const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-                return match ? match[1] : null;
-            };
-
-            const videoId = extractVideoId(content);
-            if (!videoId) throw new Error("Invalid YouTube URL provided.");
-
-            cloudUrl = content; 
-
             try {
-                sendUpdate({ status: "Extracting official video transcript...", progress: 40 });
-                const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
-                
-                if (!transcriptArr || transcriptArr.length === 0) throw new Error("No captions found.");
-                
-                textToProcess = transcriptArr.map(t => t.text).join(" ").replace(/\s+/g, " ").trim();
-                sendUpdate({ status: "Transcript extracted successfully!", progress: 50 });
+                // STRATEGY 1: Try fetching existing transcripts (Fastest)
+                sendUpdate({ status: "Extracting Captions...", progress: 12 });
+                const transcriptData = await YoutubeTranscript.fetchTranscript(content);
+                textToProcess = transcriptData.map(t => t.text).join(' ');
+                cloudUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            } catch (transcriptErr) {
+                // STRATEGY 2: Fallback to Audio Download + Whisper (Reliable)
+                console.log("Transcript blocked or missing. Falling back to Audio extraction...");
+                sendUpdate({ status: "Captions Unavailable. Processing Audio Stream...", progress: 15 });
 
-            } catch (err) {
-                console.log("YoutubeTranscript failed, initiating yt-dlp audio fallback...");
-                sendUpdate({ status: "Bypassing YouTube security blocks...", progress: 30 });
+                const videoPath = path.join(tempDir, `yt_${videoId}.mp3`);
                 
-                const audioPath = path.join(tempDir, `${videoId}.m4a`);
                 try {
+                    // This uses yt-dlp to stream only the audio
                     await yt(content, {
-                        format: 'm4a/bestaudio/best', 
-                        output: audioPath,
-                        noCheckCertificates: true,
-                        noWarnings: true,
-                        extractorArgs: 'youtube:player_client=ios,tv,web',
-                        forceIpv4: true
+                        extractAudio: true,
+                        audioFormat: 'mp3',
+                        output: videoPath,
+                        noPlaylist: true,
                     });
 
-                    sendUpdate({ status: "Transcribing audio with Whisper AI...", progress: 45 });
+                    sendUpdate({ status: "Transcribing Audio with Whisper AI...", progress: 18 });
                     const transcription = await groq.audio.transcriptions.create({
-                        file: fs.createReadStream(audioPath),
+                        file: fs.createReadStream(videoPath),
                         model: "whisper-large-v3"
                     });
                     
                     textToProcess = transcription.text;
-                    sendUpdate({ status: "Audio transcribed successfully!", progress: 50 });
-                } catch (fallbackErr) {
-                    console.error("YouTube Fallback Failed:", fallbackErr.message);
-                    throw new Error("YouTube blocked this video. Download it locally and use 'Upload' instead.");
-                } finally {
-                    // Always clean up the youtube audio temp file
-                    if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+                    cloudUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+                    // Cleanup the audio file after transcription
+                    if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+                } catch (ytErr) {
+                    throw new Error("YouTube is currently blocking access to this video. Try pasting the transcript manually.");
                 }
             }
         }
-        else if (type === 'blog') {
+lse if (type === 'blog') {
             sendUpdate({ status: "Scraping Article Content...", progress: 10 });
             try {
                 const { data } = await axios.get(content, {
