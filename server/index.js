@@ -4,7 +4,9 @@ const Groq = require('groq-sdk');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const yt = require('yt-dlp-exec');
+const yt = require('yt-dlp-exec').create({
+  binaryPath: "yt-dlp"
+});
 const cheerio = require('cheerio');
 const axios = require('axios');
 const mongoose = require('mongoose');
