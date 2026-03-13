@@ -12,7 +12,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Readable } = require('stream');
 const cloudinary = require('cloudinary').v2;
+const { GoogleGenerativeAI } = require("@google/generative-ai"); //
 require('dotenv').config();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // --- MODELS ---
 const User = require('./models/User');
@@ -183,7 +185,7 @@ app.get('/api/auth/me', auth, async (req, res) => {
 });
 // --- PLATFORM CONFIG ---
 const PLATFORMS_CONFIG = [
-  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook." },
+  { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook. No markdown " },
   { id: 'twitter', prompt: "Viral X thread writer. 5-7 punchy posts." },
   { id: 'instagram', prompt: "Instagram Strategist. Caption and Story script." },
   { id: 'tiktok', prompt: "TikTok scriptwriter. 40-second viral script." },
@@ -220,7 +222,16 @@ async function generatePlatformText(platformId, text, tone) {
                 ],
                 model: "llama-3.1-8b-instant", 
             });
-            return completion.choices[0].message.content;
+            // --- ADD CLEANING LOGIC HERE ---
+            let cleanResult = completion.choices[0].message.content;
+
+            // 1. Remove all double asterisks (**)
+            cleanResult = cleanResult.replace(/\*\*/g, '');
+
+            // 2. Remove all header symbols (#, ##, ###, ####)
+            cleanResult = cleanResult.replace(/#+/g, '');
+
+            return cleanResult;
         } catch (error) {
             if (error.status === 429 && attempts < maxAttempts - 1) {
                 attempts++;
@@ -375,7 +386,6 @@ app.post('/api/repurpose-all', auth, upload.single('file'), async (req, res) => 
     }
 });
 
-// ... (Rest of your history and delete routes remain the same)
 
 app.get('/api/history', auth, async (req, res) => {
     try {
@@ -414,30 +424,93 @@ app.delete('/api/projects/:projectId/asset/:platform', auth, async (req, res) =>
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// --- IMAGE PROMPT GENERATOR ---
 app.post('/api/generate-image-prompt', auth, async (req, res) => {
-    try {
-        const { platform, content } = req.body;
+  try {
+    const { content } = req.body;
+    const response = await groq.chat.completions.create({
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a professional prompt engineer. Return ONLY a 20-word visual description. DO NOT use quotes, DO NOT use bolding. Just raw text." 
+        },
+        { role: "user", content: `Context: ${content}` }
+      ],
+      model: "llama-3.1-8b-instant",
+    });
 
-        const response = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are a world-class Art Director. Create a single, highly detailed image generation prompt (for DALL-E or Midjourney) that visually represents the provided text. Focus on lighting, composition, and mood. No talk, just the prompt."
-                },
-                {
-                    role: "user",
-                    content: `Platform: ${platform}\nPost Content: ${content}`
-                }
-            ]
-        });
-
-        res.json({ prompt: response.choices[0].message.content });
-    } catch (e) {
-        res.status(500).json({ error: "Failed to generate visual prompt." });
-    }
+    let prompt = response.choices[0].message.content.replace(/["'**#]/g, '').replace(/\n/g, ' ').trim();
+    res.json({ prompt });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create prompt" });
+  }
 });
 
+// --- MAIN IMAGE GENERATOR ---
+// server/index.js
+
+app.post('/api/generate-image', auth, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+
+    if (!ACCOUNT_ID || !API_TOKEN) {
+      return res.status(500).json({ error: "Cloudflare credentials missing in Render Environment." });
+    }
+
+    // 1. THE BRAIN: Generate a high-quality visual description
+    const brainResponse = await groq.chat.completions.create({
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a tech visual director. Create a 15-word technical 3D scene description. Use words like: frosted glass, glowing cyan, minimalist, 16:9. NO humans, NO text, NO birds." 
+        },
+        { role: "user", content: `Context: ${prompt.substring(0, 300)}` }
+      ],
+      model: "llama-3.1-8b-instant",
+    });
+
+    // Clean the prompt of any quotes that might break the JSON
+    const visualPrompt = brainResponse.choices[0].message.content.replace(/["']/g, "");
+
+    // 2. THE ARTIST: Call Cloudflare Workers AI
+    console.log("🚀 Calling Cloudflare SDXL...");
+    
+    const response = await axios({
+      url: `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${API_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      data: JSON.stringify({ 
+        prompt: visualPrompt,
+        num_steps: 20 
+      }),
+      responseType: 'arraybuffer', // Required to receive image binary
+    });
+
+    // 3. RETURN DATA
+    const base64Image = Buffer.from(response.data).toString('base64');
+    res.json({ 
+      imageData: base64Image, 
+      mimeType: "image/png" 
+    });
+
+  } catch (error) {
+    // Detailed error logging for your Render Console
+    if (error.response && error.response.data) {
+        const errDesc = Buffer.from(error.response.data).toString();
+        console.error("❌ Cloudflare API Error:", errDesc);
+    } else {
+        console.error("❌ Request Error:", error.message);
+    }
+    
+    res.status(500).json({ error: "Cloudflare failed to generate image. Check Account ID and Token." });
+  }
+});
 
 app.delete('/api/history', auth, async (req, res) => {
     try {
