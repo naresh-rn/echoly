@@ -22,9 +22,9 @@ RUN npm install --production
 # 5. Copy the rest of your server code
 COPY . .
 
-# 6. Set the Port to 5000 (Matching your earlier request)
-ENV PORT=5000
-EXPOSE 5000
+# 6. Set the Port to 10000
+ENV PORT=10000
+EXPOSE 10000
 
 
 # 7. Start the application

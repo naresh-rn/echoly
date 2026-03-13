@@ -8,7 +8,7 @@ import LoginPage from './components/auth/LoginPage';
 import SignUpPage from './components/auth/SignUpPage';
 import Dashboard from './components/Dashboard';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:10000';
 
 export default function App() {
   const [user, setUser] = useState(null);

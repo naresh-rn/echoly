@@ -1,27 +1,27 @@
 const mongoose = require('mongoose');
 
 const ProjectSchema = new mongoose.Schema({
-    userId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User', 
-        required: true 
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
-    title: { 
-        type: String, 
-        required: true 
+    title: {
+        type: String,
+        required: true
     },
-    // Combined the duplicate source definitions here
     source: {
-        type: { type: String, enum:['YOUTUBE', 'BLOG', 'TEXT', 'FILE'], required: true },
+        type: { type: String, enum: ['YOUTUBE', 'BLOG', 'TEXT', 'FILE'], required: true },
         url: String,
-        publicId: String, // Tracks Cloudinary assets
-        rawTranscript: String // Core text extracted before AI processing
+        publicId: String,
+        rawTranscript: String
     },
     configuration: {
         tone: { type: String, default: 'PROFESSIONAL' },
-        language: { type: String, default: 'EN' }
+        language: { type: String, default: 'EN' },
+        useHashtags: { type: Boolean, default: false }
     },
-    assets:[
+    assets: [
         {
             platform: String,
             content: String,
@@ -31,6 +31,6 @@ const ProjectSchema = new mongoose.Schema({
     ],
     status: { type: String, default: 'COMPLETED' },
     createdAt: { type: Date, default: Date.now }
-});
+}, { collection: 'projects' });
 
 module.exports = mongoose.model('Project', ProjectSchema);

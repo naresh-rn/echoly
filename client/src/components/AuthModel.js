@@ -11,7 +11,7 @@ export default function AuthModal({ type, onClose, onAuthSuccess }) {
         const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
         
         try {
-            const res = await axios.post(`http://localhost:5000${endpoint}`, { email, password });
+            const res = await axios.post(`http://localhost:10000${endpoint}`, { email, password });
             
             // Save the "Digital ID Card" in the browser's memory
             localStorage.setItem('token', res.data.token);

@@ -17,6 +17,8 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, progress, s
   const [content, setContent] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [tone, setTone] = useState('Professional');
+  const [includeHashtags, setIncludeHashtags] = useState(false);
+  const [title, setTitle] = useState('');
   
   const fileInputRef = useRef(null);
 
@@ -70,7 +72,7 @@ const handleInitialize = () => {
     }
 
     // If all pass, start the engine
-    onRepurpose(type, type === 'file' ? selectedFile : content, tone);
+    onRepurpose(type, type === 'file' ? selectedFile : content, tone, includeHashtags, title);
 };
 
   const isInputReady = type === 'file' ? !!selectedFile : content.trim().length > 0;
@@ -132,6 +134,19 @@ const handleInitialize = () => {
               ))}
             </div>
           </div>
+
+          {/* HASHTAG TOGGLE */}
+          <div className="pt-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={includeHashtags} 
+                onChange={(e) => setIncludeHashtags(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 transition-all"
+              />
+              <span className="text-xs font-medium text-slate-600">Include generated hashtags</span>
+            </label>
+          </div>
         </div>
 
         {/* RIGHT PANEL: INPUT AREA */}
@@ -142,6 +157,16 @@ const handleInitialize = () => {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-700">
               {type === 'youtube' ? 'Video URL' : type === 'file' ? 'Upload Media' : 'Content Input'}
             </h2>
+          </div>
+
+          <div className="mb-4">
+             <input 
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Name your mission (e.g., Q3 Strategy Notes)"
+                className="w-full bg-slate-50/50 rounded-lg px-4 py-2.5 text-xs font-semibold border border-slate-100 outline-none focus:bg-white focus:border-blue-200 transition-all"
+             />
           </div>
 
           <div className="flex-1 mb-6">
@@ -155,7 +180,7 @@ const handleInitialize = () => {
                     : 'border-slate-200 bg-slate-50/30 hover:border-blue-300'}
                 `}
               >
-                <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept=".mp3,.mp4,.wav,.m4a" />
+                <input type="file" ref={fileInputRef} hidden onChange={handleFileChange} accept=".mp3,.mp4,.wav,.m4a,.pdf,.txt" />
                 
                 {selectedFile ? (
                   <div className="text-center">

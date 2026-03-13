@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { EyeOff, Eye } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:10000';
 
 export default function SignupPage({ setUser }) {
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });

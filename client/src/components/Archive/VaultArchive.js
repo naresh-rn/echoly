@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Calendar, Search, Layers, ArrowRight, Trash2, FileText, Youtube, Globe, HardDrive, X, Check } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:5000") + "/api";
+const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:10000") + "/api";
 
 export default function VaultArchive({ projects, onRestore, fetchHistory, onDelete }) {
     const [searchQuery, setSearchQuery] = useState("");
@@ -13,7 +13,7 @@ export default function VaultArchive({ projects, onRestore, fetchHistory, onDele
     );
 
     const deleteHistory = async () => {
-        if (window.confirm("PERMANENTLY WIPE THE VAULT?")) {
+        if (window.confirm("PERMANENTLY CLEAR ASSET HISTORY?")) {
             try {
                 await axios.delete(`${API_BASE}/history`, {
                     headers: { 'x-auth-token': localStorage.getItem('token') }
@@ -40,7 +40,7 @@ export default function VaultArchive({ projects, onRestore, fetchHistory, onDele
         return (
             <div className="bg-white border border-slate-200 rounded-2xl py-20 flex flex-col items-center justify-center text-center">
                 <Layers size={32} className="text-slate-200 mb-3" />
-                <h3 className="text-slate-900 font-semibold text-sm">Vault is Empty</h3>
+                <h3 className="text-slate-900 font-semibold text-sm">History is Empty</h3>
                 <p className="text-slate-400 text-xs max-w-xs mt-1 px-6 leading-relaxed">
                     Once you process content, your history will appear here.
                 </p>
@@ -67,7 +67,7 @@ export default function VaultArchive({ projects, onRestore, fetchHistory, onDele
                     onClick={deleteHistory}
                     className="flex items-center gap-1.5 text-slate-400 hover:text-black transition-colors text-[10px] font-semibold uppercase tracking-wider px-2"
                 >
-                    <Trash2 size={12} /> Wipe Vault
+                    <Trash2 size={12} /> Clear History
                 </button>
             </div>
 
