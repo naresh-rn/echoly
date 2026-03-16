@@ -1,8 +1,14 @@
-# ECHOLY ⚡ — The Ultimate AI Content Repurposing Engine
+# ⚡ ECHOLY — The Ultimate AI Content Repurposing Engine
 
 ![Echoly Banner](https://images.unsplash.com/photo-1614850523296-e8c0d1ff74g2?auto=format&fit=crop&w=1200&q=80)
 
-Echoly is a state-of-the-art AI-powered platform designed for creators, marketers, and technical writers. It transforms high-density content—like long-form videos, dense PDFs, technical articles, or raw scripts—into a high-performance distribution bundle for every major social platform.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/badge/Node.js-v18+-green.svg)](https://nodejs.org/)
+[![React Version](https://img.shields.io/badge/React-v18-61DAFB.svg)](https://reactjs.org/)
+[![Database: MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248.svg)](https://www.mongodb.com/)
+[![AI Engine: Llama 3.1](https://img.shields.io/badge/AI_Engine-Llama_3.1--8b-blue.svg)](https://groq.com/)
+
+**Echoly** is a state-of-the-art AI-powered platform designed for creators, marketers, and technical writers. It transforms high-density content—like long-form videos, dense PDFs, technical articles, or raw scripts—into a high-performance distribution bundle for every major social platform.
 
 ---
 
@@ -11,112 +17,95 @@ Echoly is a state-of-the-art AI-powered platform designed for creators, marketer
 Modern content creation is fragmented. A single podcast or blog post contains hundreds of potential "micro-content" sparks, but manual repurposing is time-consuming and often misses the specific nuances of different platforms.
 
 **Echoly solves this by:**
-1.  **Extraction:** Pulling clean metadata and transcripts from YouTube, web URLs, or uploaded media.
-2.  **Synthesis:** Using high-reasoning LLMs (Llama 3.1) to rewrite the content through different "platform lenses" (e.g., PAS framework for LinkedIn, viral threads for X).
-3.  **Visualization:** Automatically generating high-end 3D renders using Stable Diffusion to match your content's theme.
-4.  **Archiving:** Storing every mission in a persistent "Asset History" for future restoration and refinement.
+1.  **Extraction:** Pulling clean metadata and transcripts from YouTube, web URLs, or uploaded media via **Groq Whisper**.
+2.  **Synthesis:** Using high-reasoning LLMs (**Llama 3.1 via Groq**) to rewrite content through different "platform lenses" (e.g., PAS framework for LinkedIn, viral threads for X).
+3.  **Visualization:** Automatically generating high-end AI visuals using **Stable Diffusion XL Lightning** to match your content's theme.
+4.  **Archiving:** Storing every mission in a persistent **Vault** for future restoration and refinement.
 
 ---
 
 ## ✨ Key Features
 
 ### 🛠️ The Engine Workspace
--   **Source DNA:** Input content via **YouTube Links**, **Blog URLs**, **Media Uploads** (.mp3, .mp4, .pdf, .txt), or **Raw Text**.
--   **Custom Mission Titles:** Name your project—the title is used to drive both the database organization and the AI visual engine.
--   **Tone Selection:** Choose between Professional, Viral, Educational, Stoic, Bold, or Casual outputs.
--   **Hashtag Engine:** Toggle specific, platform-relevant hashtag generation.
+-   **Multi-Source Input:** Process content via **YouTube Links**, **Blog URLs**, **Media Uploads** (.mp3, .mp4, .pdf), or **Raw Text**.
+-   **Mission Context:** Name your projects to drive both database organization and the AI visual engine prompts.
+-   **Tone Control:** Choose from Professional, Viral, Educational, Stoic, Bold, or Casual outputs.
+-   **Hashtag Generator:** Smart, platform-specific hashtag generation (optional).
 
-### 🎨 Visual Engine
--   **SDXL Lightning:** Integrated with Cloudflare Workers AI to generate minimalist, high-end 3D visual assets (Unreal Engine 5 aesthetic) for your posts in under 5 seconds.
+### 🎨 Visual Engine (SDXL Lightning)
+-   **Instant Visualization:** Integrated with Cloudflare Workers AI to generate minimalist, high-end 3D visual assets in under 5 seconds.
+-   **Aesthetic Alignment:** Prompts are automatically engineered for a "Frosted glass, technical 8k render" look (Unreal Engine 5 aesthetic).
 
-### 📂 Asset History (The Vault)
--   **Persistent Storage:** Every generation is saved to a specialized MongoDB collection.
--   **Restoration Logic:** Instantly restore any past project, including the original transcript and all generated social posts.
--   **Live Editing:** Modify generated assets directly in the UI and save them back to the database.
+### 📂 The Vault (Asset History)
+-   **Infinite Recall:** Every generation is saved to a specialized MongoDB collection.
+-   **Live Studio:** Modify generated assets directly in the UI and save updates back to the cloud.
+-   **Bulk Export:** Copy all assets or download as Markdown for immediate distribution.
 
-### 🛡️ Admin Dashboard (Command Center)
--   **Global Oversight:** Admins can view a roster of all active users.
--   **Content Feed:** A global table tracking every project generated across the platform for quality control and system monitoring.
+### 🛡️ Command Center (Admin)
+-   **Global Roster:** Track active users and platform usage metrics.
+-   **Mission Monitoring:** Oversight of all projects generated across the platform for quality control.
 
 ---
 
 ## 🛠️ Technical Stack
 
-### **Frontend**
--   **React 18 & Vite:** For a blazing fast, single-page application experience.
--   **Vanilla CSS + Tailwind:** A custom high-end design system featuring glassmorphism and modern typography.
--   **Lucide React:** Premium iconography.
--   **Server-Sent Events (SSE):** Real-time progress streaming from the backend engine.
-
-### **Backend**
--   **Node.js & Express:** Modular, controller-service architecture.
--   **MongoDB & Mongoose:** Scalable document storage with customized collection mapping.
--   **JWT & Bcrypt:** Secure authentication and password hashing.
--   **Multer:** Binary media stream processing with original extension preservation.
-
-### **AI Core**
--   **Groq SDK (Llama 3.1-8b):** Ultra-fast text generation and prompt engineering.
--   **Groq Whisper-Large-v3:** High-fidelity audio/video transcription.
--   **Cloudflare Workers AI:** Running Stable Diffusion XL Lightning for image synthesis.
--   **Cloudinary:** For secure, high-speed CDN cloud storage of media assets.
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend** | React 18, Vite, Vanilla CSS + Tailwind, Lucide React, SSE (Real-time Progress) |
+| **Backend** | Node.js, Express (Modular MVC), Multer, JWT + Bcrypt |
+| **Database** | MongoDB Atlas / Compass (Mongoose ODM) |
+| **AI (Text)** | Groq SDK (Llama 3.1-8b-instant) |
+| **AI (Audio)** | Groq Whisper-Large-v3 (Hifi Transcription) |
+| **AI (Image)** | Cloudflare Workers AI (SDXL Lightning) |
+| **Storage** | Cloudinary CDN (Media assets) |
 
 ---
 
 ## 📦 Installation & Setup
 
 ### **1. Prerequisites**
--   Node.js (v18+)
--   MongoDB Instance (Local or Atlas)
--   API Keys: Groq, Cloudinary, and Cloudflare.
+- Node.js (v18+)
+- MongoDB (Atlas or Local)
+- API Keys: [Groq](https://console.groq.com/), [Cloudinary](https://cloudinary.com/), and [Cloudflare](https://dash.cloudflare.com/).
 
-### **2. Environment Configuration**
-Create a `.env` file in the `server` directory:
+### **2. Setup Environment Variables**
+Create a `.env` in the `server` directory:
 ```env
 PORT=10000
-MONGO_URI=your_mongodb_uri
-JWT_SECRET=your_jwt_secret
+MONGO_URI=mongodb+srv://your_uri
+JWT_SECRET=your_secret_key
 
+# AI Keys
 GROQ_API_KEY=your_groq_key
+CLOUDFLARE_ACCOUNT_ID=your_id
+CLOUDFLARE_API_TOKEN=your_token
+
+# Media Storage
 CLOUDINARY_CLOUD_NAME=name
 CLOUDINARY_API_KEY=key
 CLOUDINARY_API_SECRET=secret
-CLOUDFLARE_ACCOUNT_ID=id
-CLOUDFLARE_API_TOKEN=token
 ```
 
-### **3. Running Locally**
-
-**Backend:**
+### **3. Running Locally (Monorepo)**
+From the root directory:
 ```bash
-cd server
-npm install
-npm start
-```
+# Install all dependencies
+npm run install:all
 
-**Frontend:**
-```bash
-cd client
-npm install
-npm start
+# Start both Client & Server concurrently
+npm run dev
 ```
-*The app will be available at `http://localhost:3000` (or `3001` if port 3000 is busy).*
+*The app will be available at `http://localhost:3000`.*
 
 ---
 
-## 🏗️ Architecture Overview
-
-The backend follows a **Modular MVC (Model-View-Controller)** pattern for scalability:
--   `/models`: Definition of User and Project schemas.
--   `/routes`: Entry points for Auth, Projects, Admin, and the Generation Engine.
--   `/controllers`: Handling the request-response cycle and status updates.
--   `/services`: Isolated heavy-lifting logic (AI generation, media processing, Cloudinary uploads).
--   `/middleware`: Security layers for JWT verification and Admin-only enforcement.
+## 🏗️ Architecture & Design
+Detailed system documentation including ER Diagrams, Sequence Diagrams, and Architecture flows can be found in [DIAGRAMS.md](./DIAGRAMS.md).
 
 ---
 
-## 👨‍💻 Author
-
+## 👨– Author
 **Echoly Team**  
-Designed for creators who value speed and aesthetic excellence.
+*Designed for creators who value speed and aesthetic excellence.*
 
 *License: MIT*
