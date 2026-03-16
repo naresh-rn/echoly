@@ -231,14 +231,14 @@ Shows the top-level system interactions with external entities.
 
 ```mermaid
 flowchart TB
-    User(["👤 User"])
-    Admin(["🛡️ Admin"])
-    Groq(["🤖 Groq API"])
-    Cloudinary(["☁️ Cloudinary"])
-    Cloudflare(["🌩️ Cloudflare Workers AI"])
-    MongoDB(["🍃 MongoDB Atlas"])
-    YouTube(["▶️ YouTube"])
-    Web(["🌐 Web Pages"])
+    User(["User"])
+    Admin(["Admin Admin"])
+    Groq(["Groq API"])
+    Cloudinary(["Cloudinary"])
+    Cloudflare(["Cloudflare Workers AI"])
+    MongoDB(["MongoDB Atlas"])
+    YouTube(["YouTube"])
+    Web(["Web Pages"])
 
     User -- "Content + Settings" --> ECHOLY["⚡ ECHOLY System"]
     ECHOLY -- "Generated Posts + AI Image" --> User
@@ -328,8 +328,8 @@ Describes the functional capabilities by user role.
 
 ```mermaid
 flowchart LR
-    User(["👤 Regular User"])
-    Admin(["🛡️ Admin"])
+    User(["Regular User"])
+    Admin(["Admin"])
 
     subgraph Echoly Platform
         UC1["Register / Login"]
@@ -379,14 +379,14 @@ Illustrates the deployment and layered architecture.
 
 ```mermaid
 flowchart TB
-    subgraph Client ["🖥️ Frontend Layer (React)"]
+    subgraph Client ["Frontend Layer React"]
         A1[Dashboard.js] --> A2[EngineWorkspace.js]
         A1 --> A3[VaultArchive.js]
         A1 --> A4[AdminDashboard.js]
         A1 --> A5[ResultCard.js]
     end
 
-    subgraph Server ["🗄️ Backend Layer (Express / Node.js)"]
+    subgraph Server ["Backend Layer Express Nodejs"]
         B1[index.js - Server Entry] --> B2[authRoute.js]
         B1 --> B3[engineRoute.js]
         B1 --> B4[projectRoute.js]
@@ -401,7 +401,7 @@ flowchart TB
         C2 --> D2[mediaService.js]
     end
 
-    subgraph External ["☁️ External APIs"]
+    subgraph External ["External APIs"]
         E1[Groq LLM API]
         E2[Groq Whisper API]
         E3[Cloudinary CDN]
@@ -409,7 +409,7 @@ flowchart TB
         E5[YouTube / yt-dlp]
     end
 
-    subgraph Database ["🍃 Data Layer (MongoDB Atlas)"]
+    subgraph Database ["Data Layer MongoDB Atlas"]
         F1[(users collection)]
         F2[(projects collection)]
     end
