@@ -4,7 +4,7 @@ This document contains a comprehensive set of UML, Behavioral, and Architectural
 
 ---
 
-## 🏗️ 1. Structural Diagrams
+## 1. Structural Diagrams
 
 ### 1.1 Class Diagram
 Describes the static structure showing classes, attributes, operations, and relationships.
@@ -55,13 +55,10 @@ classDiagram
     class AuthController {
         +registerUser(req, res)
         +loginUser(req, res)
-        +getMe(req, res)
     }
 
     class EngineController {
         +repurposeAll(req, res)
-        +repurposeSingle(req, res)
-        +getImagePrompt(req, res)
         +makeImage(req, res)
     }
 
@@ -75,98 +72,100 @@ classDiagram
 Shows how the system is divided into physical components and their dependencies.
 
 ```mermaid
-componentDiagram
-    component [Frontend App (React)] as FE
-    component [Auth Service] as Auth
-    component [Generation Engine] as Engine
-    component [Media Processor] as Media
-    component [Database (MongoDB)] as DB
-    component [Groq API] as AI
-    component [Cloudinary] as CDN
-    component [Cloudflare AI] as Visual
+flowchart TB
+    subgraph Frontend_App
+        A[React UI Components]
+    end
+    subgraph Backend_Services
+        B[Auth Service]
+        C[Generation Engine]
+        D[Media Processor]
+    end
+    subgraph Storage_Layer
+        E[(MongoDB Atlas)]
+        G[Cloudinary Media]
+    end
+    subgraph AI_Core
+        F[Groq LLM Service]
+        H[Cloudflare Visual AI]
+    end
 
-    FE ..> Auth : JWT Request
-    FE ..> Engine : SSE Request
-    Engine ..> Media : Extract Content
-    Engine ..> AI : Llama 3.1
-    Engine ..> DB : Persist Project
-    Media ..> CDN : Upload
-    FE ..> Visual : Image Gen
+    A -- "Auth Request" --> B
+    A -- "SSE Stream" --> C
+    C -- "Analysis" --> F
+    C -- "Extract" --> D
+    D -- "Store" --> G
+    C -- "Persist" --> E
+    A -- "Render" --> H
 ```
 
 ### 1.3 Deployment Diagram
 Illustrates the physical deployment of artifacts on nodes.
 
 ```mermaid
-deploymentDiagram
-    node "User Browser" {
-        artifact "React SPA"
-    }
-    node "Vercel / Hosting" {
-        node "Server Container" {
-            artifact "Node.js Express API"
-        }
-    }
-    node "MongoDB Atlas Cluster" {
-        database "Echoly_DB"
-    }
-    node "Third Party Edge" {
-        node "Groq Inference"
-        node "Cloudflare Workers AI"
-        node "Cloudinary"
-    }
+flowchart TB
+    subgraph User_Environment
+        B[Web Browser]
+    end
+    subgraph Hosting_Vercel
+        S[Node.js Runtime]
+        A[Express API Instance]
+    end
+    subgraph Database_Cloud
+        M[(MongoDB Cluster)]
+    end
+    subgraph Services_Edge
+        G[Groq API]
+        C[Cloudflare]
+        D[Cloudinary]
+    end
 
-    "React SPA" -- "HTTPS/WSS" : "Node.js Express API"
-    "Node.js Express API" -- "Mongoose" : "Echoly_DB"
+    B -- "HTTPS/TLS" --> S
+    S -- "Execute" --> A
+    A -- "Mongoose" --> M
+    A -- "API Request" --> G
+    A -- "API Request" --> C
+    A -- "Upload" --> D
 ```
 
 ### 1.4 Object Diagram
 A snapshot of instances and their relationships at a specific point in time.
 
 ```mermaid
-objectDiagram
-    object "UserInstance : User" as U1 {
-        id: "usr_101"
-        name: "Admin"
-    }
-    object "ProjectInstance : Project" as P1 {
-        id: "prj_202"
-        title: "Q3 Marketing"
-        status: "COMPLETED"
-    }
-    object "LinkedinAsset : Asset" as A1 {
-        platform: "LINKEDIN"
-        content: "Thrilled to share..."
-    }
-
-    U1 .. P1 : owns
-    P1 .. A1 : contains
+flowchart LR
+    subgraph Active_Instances
+        direction LR
+        U1["User Instance<br/>id: usr_admin<br/>role: ADMIN"]
+        P1["Project Instance<br/>id: prj_marketing<br/>status: ACTIVE"]
+        A1["Asset Instance<br/>platform: X/TWITTER<br/>type: THREAD"]
+    end
+    U1 -- "owns" --> P1
+    P1 -- "contains" --> A1
 ```
 
 ### 1.5 Package Diagram
 Organizes system elements into packages and shows dependencies.
 
 ```mermaid
-packageDiagram
-    package "Client-Side" {
-        [Components]
-        [Hooks]
-        [Services]
-    }
-    package "Server-Side" {
-        [Routes]
-        [Controllers]
-        [Middleware]
-        [Services]
-        [Models]
-    }
-    package "External-Infrastructure" {
-        [Database]
-        [AI-Providers]
-    }
+flowchart TB
+    subgraph Client_Package
+        C1[UI Components]
+        C2[Context Hooks]
+        C3[API Services]
+    end
+    subgraph Server_Package
+        S1[Route Definitions]
+        S2[Middlewares]
+        S3[Logic Controllers]
+        S4[Data Models]
+    end
+    subgraph External_Package
+        E1[DB Drivers]
+        E2[AI SDKs]
+    end
 
-    "Client-Side" ..> "Server-Side" : REST / SSE
-    "Server-Side" ..> "External-Infrastructure" : API Calls
+    Client_Package -- "REST/SSE" --> Server_Package
+    Server_Package -- "Dependency" --> External_Package
 ```
 
 ### 1.6 Composite Structure Diagram
@@ -174,21 +173,21 @@ Shows the internal structure of the AI Engine component and its ports.
 
 ```mermaid
 flowchart TB
-    subgraph AIEngine ["Engine Component"]
-        Port1[Input Port]
-        Port2[Output Port]
-        subgraph Internal ["Internal Parts"]
-            L1[Data Extractor]
-            L2[Content Synthesizer]
-            L3[Asset Bundler]
+    subgraph AI_Engine_Component
+        InputPort[Input Port]
+        OutputPort[Output Port]
+        subgraph Logic_Internal
+            D[Data Extractor]
+            S[Synthesizer]
+            B[Bundler]
         end
     end
-    Source --> Port1
-    Port1 --> L1
-    L1 --> L2
-    L2 --> L3
-    L3 --> Port2
-    Port2 --> Storage
+    Client --> InputPort
+    InputPort --> D
+    D --> S
+    S --> B
+    B --> OutputPort
+    OutputPort --> Client
 ```
 
 ### 1.7 Profile Diagram
@@ -196,51 +195,50 @@ Illustrates extensions of UML elements for AI-specific stereotypes.
 
 ```mermaid
 classDiagram
-    class Prototype {
-        <<Stereotype>>
+    class BaseType {
+        <<Prototype>>
     }
-    class AI_Agent {
-        <<LLM_Powered>>
-        +Temperature
-        +Top_P
+    class AI_Module {
+        <<LLM_Inference>>
+        +ModelType
+        +ContextWindow
     }
-    class Media_Asset {
-        <<Cloud_Stored>>
-        +CDN_URL
+    class Data_Asset {
+        <<Cloud_Store>>
+        +StorageURL
     }
-    AI_Agent --|> Prototype
-    Media_Asset --|> Prototype
+    AI_Module --|> BaseType
+    Data_Asset --|> BaseType
 ```
 
 ---
 
-## 🎬 2. Behavioral Diagrams
+## 2. Behavioral Diagrams
 
 ### 2.1 Use Case Diagram
 Functional requirements from the perspective of user roles.
 
 ```mermaid
 flowchart LR
-    User(["User"])
-    Admin(["Admin"])
+    User[Regular User]
+    Admin[Admin]
 
-    subgraph Platform
-        UC1[Create Mission]
-        UC2[Paste YT/Blog/Media]
-        UC3[Select AI Tone]
-        UC4[View Progress]
-        UC5[Edit Assets]
-        UC6[Manage Users]
-        UC7[View Global Feed]
+    subgraph System_Boundaries
+        direction TB
+        UC1[Create Repurpose Mission]
+        UC2[Extract from Media]
+        UC3[View Evolution Stats]
+        UC4[Edit AI Outputs]
+        UC5[Manage Project Vault]
+        UC6[Configure Global Settings]
     end
 
     User --> UC1
     User --> UC2
-    User --> UC3
     User --> UC4
     User --> UC5
+    Admin --> UC3
     Admin --> UC6
-    Admin --> UC7
 ```
 
 ### 2.2 Activity Diagram
@@ -248,42 +246,43 @@ The step-by-step workflow of a generation mission.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> InputReceived
-    InputReceived --> ContentExtraction : Source Type Detected
-    state ContentExtraction {
-        [*] --> DownloadYT
-        [*] --> ScrapeBlog
-        [*] --> ParsePDF
-        [*] --> TranscribeAudio
+    [*] --> Start
+    Start --> SourceDetection
+    state SourceDetection {
+        InputReceived --> YT_Flow
+        InputReceived --> Blog_Flow
+        InputReceived --> File_Flow
     }
-    ContentExtraction --> AISynthesis : Clean Text Ready
-    AISynthesis --> GeneratingAssets : Iterate 12 Platforms
-    GeneratingAssets --> SavingToDB : Bundling Ready
-    SavingToDB --> Completed
-    Completed --> [*]
+    SourceDetection --> TextExtraction
+    TextExtraction --> AISynthesis
+    AISynthesis --> SuccessCheck
+    SuccessCheck --> SaveProject : Valid
+    SuccessCheck --> ErrorLog : Invalid
+    SaveProject --> Finished
+    Finished --> [*]
 ```
 
 ### 2.3 Sequence Diagram
-Timed interaction between objects for the "Repurpose All" flow.
+Timed interaction between objects for the main generation flow.
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant App as React UI
-    participant Svr as Express Server
-    participant AI as Llama 3.1
-    participant DB as MongoDB
+    participant App as Dashboard UI
+    participant Svr as Node Server
+    participant AI as Groq Llama
+    participant DB as MongoDB Cluster
 
-    User->>App: Clicks "Initialize"
-    App->>Svr: POST /api/repurpose-all
-    Note right of Svr: SSE Connection Open
-    Svr-->>App: SSE: Starting (5%)
-    Svr->>AI: Generate Social Posts
-    AI-->>Svr: Content Received
-    Svr-->>App: SSE: Platform Ready (50%)
-    Svr->>DB: Save Project
-    DB-->>Svr: OK
-    Svr-->>App: SSE: Completed (100%)
+    User->>App: Submits Mission
+    App->>Svr: POST /api/repurpose
+    Note right of Svr: Async Execution Started
+    Svr-->>App: SSE: 0% Initialized
+    Svr->>AI: Generate Platform Bundle
+    AI-->>Svr: Content Response
+    Svr-->>App: SSE: 80% Synthesis Complete
+    Svr->>DB: Update Project Record
+    DB-->>Svr: Success
+    Svr-->>App: SSE: 100% Completed
 ```
 
 ### 2.4 State Machine Diagram
@@ -291,14 +290,14 @@ Tracks the lifecycle of a Project document.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> DRAFT
-    DRAFT --> INITIALIZING : User clicks generate
-    INITIALIZING --> EXTRACTING : Source processing
-    EXTRACTING --> SYNTHESIZING : AI engine working
-    SYNTHESIZING --> COMPLETED : Success
-    SYNTHESIZING --> FAILED : Error detected
-    FAILED --> DRAFT : Retry
-    COMPLETED --> ARCHIVED : User deletes
+    [*] --> IDLE
+    IDLE --> PROCESSING : Run Command
+    PROCESSING --> ANALYSIS : Extracting
+    ANALYSIS --> GENERATING : AI Working
+    GENERATING --> COMPLETED : Finished
+    GENERATING --> ERROR : Failure
+    ERROR --> IDLE : Reset
+    COMPLETED --> ARCHIVED : Delete
     ARCHIVED --> [*]
 ```
 
@@ -306,64 +305,64 @@ stateDiagram-v2
 Focuses on object relationships and message exchange.
 
 ```mermaid
-graph LR
-    User -- "1. Initialize" --> UI[React UI]
-    UI -- "2. POST Request" --> Svr[Express Server]
-    Svr -- "3. Transcribe" --> Media[Media Service]
-    Media -- "4. Transcription" --> Svr
-    Svr -- "5. Synthesis" --> AI[Groq AI]
-    AI -- "6. Social Assets" --> Svr
-    Svr -- "7. Persist" --> DB[(MongoDB)]
+flowchart LR
+    U[User] -- "1. Launch" --> UI[Dashboard]
+    UI -- "2. API POST" --> BE[Backend]
+    BE -- "3. Transcribe" --> MS[Media Service]
+    MS -- "4. Raw Text" --> BE
+    BE -- "5. Prompt" --> AI[Groq]
+    AI -- "6. Social Post" --> BE
+    BE -- "7. Save" --> DB[(Database)]
 ```
 
 ### 2.6 Interaction Overview Diagram
-Combines activity and sequence elements for high-level control.
+Combines activity and sequence elements for control logic.
 
 ```mermaid
 flowchart TD
-    Start --> Auth{Is Authenticated?}
-    Auth -- No --> Login[Login Flow]
-    Auth -- Yes --> Input[Input Content]
-    Input --> Process[Ref: Sequence Diagram - Generation]
-    Process --> Result{Success?}
-    Result -- Yes --> Display[Show Results]
-    Result -- No --> Error[Show Error]
-    Display --> End
-    Login --> Auth
+    S([Start]) --> AuthCheck{Logged In?}
+    AuthCheck -- No --> AuthFlow[Authentication]
+    AuthCheck -- Yes --> MissionInput[Input Mission]
+    MissionInput --> CoreProcess[Process Mission]
+    CoreProcess --> StatusCheck{Success?}
+    StatusCheck -- No --> RetryFlow[Retry Logic]
+    StatusCheck -- Yes --> ResultView[Display Assets]
+    ResultView --> E([End])
+    AuthFlow --> AuthCheck
 ```
 
 ### 2.7 Timing Diagram
-Visualizes state changes over a time window.
+Visualizes state benchmarks over a generation window.
 
 ```mermaid
 timeline
-    title Generation Timing Window (60s)
-    0-15s : Extraction State : Processing input media
-    15-55s : Synthesis State : AI generating social bundles
-    55-60s : Persisting State : Saving to Mongo and final SSE
+    title Mission Benchmarks (60s)
+    0-10s : Phase 1 : Media Extraction and Cleaning
+    10-50s : Phase 2 : Multi-platform AI Synthesis
+    50-60s : Phase 3 : Database Persistence and Reporting
 ```
 
 ---
 
-## 🗺️ 3. Architectural & Data Diagrams
+## 3. Architectural & Data Diagrams
 
 ### 3.1 Entity Relationship Diagram (ERD)
 Logical data model for the application.
 
 ```mermaid
 erDiagram
-    USER ||--o{ PROJECT : owns
-    PROJECT ||--o{ ASSET : generates
-    PROJECT {
-        string title
-        string status
-        object source
-        object configuration
+    OWNER ||--o{ MISSION : manages
+    MISSION ||--o{ OUTPUT : produces
+    MISSION {
+        string mission_title
+        string current_status
+        json source_data
+        json settings_tone
     }
-    ASSET {
-        string platform
-        string content
-        date generatedAt
+    OUTPUT {
+        string platform_type
+        text generated_post
+        datetime timestamp
     }
 ```
 
@@ -372,33 +371,33 @@ Data movements through internal processes.
 
 ```mermaid
 flowchart LR
-    Input([Raw Source]) --> P1[Extraction Process]
-    P1 -->|Clean Text| P2[LLM Synthesis]
-    P2 -->|Draft Assets| P3[Visual Engine]
-    P2 -->|Draft Assets| P4[Storage Engine]
-    P4 <--> DB[(MongoDB)]
-    P3 --> UI([Frontend View])
+    RawInput[User Input] -->|Data| P1[Extractor Node]
+    P1 -->|Text| P2[AI Engine Node]
+    P2 -->|Draft| P3[Visualizer Node]
+    P2 -->|Draft| P4[Persistence Node]
+    P4 <--> DB[(Atlas Server)]
+    P3 --> UI[Display Layer]
     P4 --> UI
 ```
 
-### 3.3 C4 System Context Diagram
+### 3.3 System Context Diagram
 High-level system abstraction.
 
 ```mermaid
 C4Context
-    title System Context Diagram for Echoly
+    title Context Diagram: Echoly System
     
-    Person(user, "Content Creator", "Wants to repurpose long content.")
-    System(echoly, "Echoly AI Platform", "Processes media and generates social posts.")
+    Person(user, "User", "Content Creator.")
+    System(echoly, "Echoly AI Engine", "Generates social media bundles.")
     
-    System_Ext(groq, "Groq AI", "LLM Inference Engine.")
-    System_Ext(cloudflare, "Cloudflare AI", "Image Generation.")
-    System_Ext(db, "MongoDB Atlas", "Data Persistence.")
+    System_Ext(groq, "Groq Cloud", "LLM Inference.")
+    System_Ext(cloudinary, "Cloudinary", "Storage.")
+    System_Ext(mongo, "MongoDB", "Data.")
 
-    Rel(user, echoly, "Uses", "HTTPS")
-    Rel(echoly, groq, "Requests Text", "JSON/API")
-    Rel(echoly, cloudflare, "Requests Visuals", "JSON/API")
-    Rel(echoly, db, "Saves History", "Mongoose")
+    Rel(user, echoly, "Interacts", "HTTPS")
+    Rel(echoly, groq, "Uses", "API")
+    Rel(echoly, cloudinary, "Uses", "API")
+    Rel(echoly, mongo, "Uses", "Query")
 ```
 
 ### 3.4 C4 Container Diagram
@@ -406,18 +405,18 @@ Technical containers in the system.
 
 ```mermaid
 C4Container
-    title Container Diagram for Echoly System
+    title Container Diagram: Echoly Ecosystem
     
-    Person(user, "User", "Content Creator.")
+    Person(p, "User")
     
-    System_Boundary(c1, "Echoly AI Platform") {
-        Container(web_app, "Web Application", "React", "Provides UI.")
-        Container(api, "API Application", "Node.js, Express", "Handles business logic.")
-        ContainerDb(db, "Database", "MongoDB Atlas", "Stores history.")
+    System_Boundary(b, "Echoly Platform") {
+        Container(app, "Web App", "React", "User UI")
+        Container(api, "API Service", "Express", "Main Logic")
+        ContainerDb(db, "Database", "MongoDB", "History")
     }
     
-    Rel(user, web_app, "Uses", "HTTPS")
-    Rel(web_app, api, "API Calls", "JSON")
+    Rel(p, app, "Uses", "HTTPS")
+    Rel(app, api, "Requests", "JSON/SSE")
     Rel(api, db, "Read/Write", "Mongoose")
 ```
 
@@ -426,38 +425,29 @@ Components within the API container.
 
 ```mermaid
 C4Component
-    title Component Diagram for API Application
+    title Component Diagram: Engine Service
     
-    Container(web_app, "Web Application", "React", "User Interface.")
-    
-    Container_Boundary(api, "API Application") {
-        Component(auth_ctrl, "Auth Controller", "Express", "Handles login.")
-        Component(eng_ctrl, "Engine Controller", "Express", "Manages logic.")
-        Component(ai_svc, "AI Service", "Groq SDK", "LLM interface.")
+    Container_Boundary(api, "API Service") {
+        Component(auth, "Auth Handler", "Bcrypt/JWT")
+        Component(gen, "Engine Handler", "Stream Logic")
+        Component(svc, "AI Wrapper", "Groq Client")
     }
     
-    ContainerDb(db, "Database", "MongoDB", "Data Storage.")
-    
-    Rel(web_app, eng_ctrl, "Starts Mission", "SSE")
-    Rel(eng_ctrl, ai_svc, "Requests Synthesis")
-    Rel(eng_ctrl, db, "Persists Project")
+    Rel(gen, svc, "Call")
 ```
 
-### 3.6 Flowchart: Generation Logic
-Detailed conditional flow of the backend engine.
+### 3.6 Level 0 Context Flowchart
+Highest level flowchart logic.
 
 ```mermaid
 flowchart TD
-    Start([Start Generation]) --> CheckSource{Source Type?}
-    CheckSource -->|File| Upload[Cloudinary Upload]
-    CheckSource -->|URL| Scrape[Scrape/Download]
-    Upload --> Transcript[Groq Whisper]
-    Scrape --> Text[Clean Text]
-    Transcript --> AI[AI Synthesis Loop]
-    Text --> AI
-    AI --> Save[Save to MongoDB]
-    Save --> End([End Mission])
+    A[Start] --> B[Receive Source]
+    B --> C{Verify Authorization}
+    C -- Valid --> D[Execute Engine]
+    C -- Invalid --> E[Reject]
+    D --> F[Return Bundle]
+    F --> G[Finish]
 ```
 
 ---
-*Generated for Echoly v1.0 — Architecture Dossier*
+*Documentation dossier generated for Echoly v1.0 — Architecture Team*

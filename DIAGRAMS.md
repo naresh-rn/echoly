@@ -69,16 +69,12 @@ classDiagram
         +String password
         +Boolean isAdmin
         +Date createdAt
-        +comparePassword(candidate) Boolean
     }
 
     class Project {
         +ObjectId _id
         +ObjectId userId
         +String title
-        +Source source
-        +Configuration configuration
-        +Asset[] assets
         +String status
         +Date createdAt
     }
@@ -106,60 +102,17 @@ classDiagram
     class AuthController {
         +registerUser(req, res)
         +loginUser(req, res)
-        +getMe(req, res)
     }
 
     class EngineController {
         +repurposeAll(req, res)
-        +repurposeSingle(req, res)
-        +getImagePrompt(req, res)
         +makeImage(req, res)
     }
 
-    class ProjectController {
-        +getHistory(req, res)
-        +updateAsset(req, res)
-        +deleteProject(req, res)
-        +deleteAsset(req, res)
-        +deleteAllHistory(req, res)
-    }
-
-    class AdminController {
-        +getAllUsers(req, res)
-        +getAllProjects(req, res)
-    }
-
-    class AIService {
-        +generatePlatformText(platformId, text, tone, useHashtags) String
-        +generateImagePrompt(content) String
-        +generateImage(prompt) Object
-    }
-
-    class MediaService {
-        +processYoutubeLink(url, dir, sendUpdate) String
-        +processBlogLink(url, sendUpdate) String
-        +uploadToCloudinary(filePath) Object
-        +parsePdf(filePath) Object
-    }
-
-    class AuthMiddleware {
-        +auth(req, res, next)
-        +adminAuth(req, res, next)
-    }
-
-    Project "1" --> "1" Source : contains
-    Project "1" --> "1" Configuration : has
-    Project "1" --> "*" Asset : produces
-    User "1" --> "*" Project : owns
-
-    EngineController ..> AIService : uses
-    EngineController ..> MediaService : uses
-    EngineController ..> Project : creates
-    ProjectController ..> Project : manages
-    AdminController ..> User : reads
-    AdminController ..> Project : reads
-    AuthController ..> User : manages
-    AuthMiddleware ..> User : validates
+    Project "1" -- "1" Source : contains
+    Project "1" -- "1" Configuration : has
+    Project "1" -- "*" Asset : produces
+    User "1" -- "*" Project : owns
 ```
 
 ---
@@ -173,18 +126,14 @@ sequenceDiagram
     actor User
     participant FE as Frontend (React)
     participant BE as Backend (Express)
-    participant Auth as Auth Middleware
     participant Eng as Engine Controller
     participant AI as AI Service (Groq)
     participant Media as Media Service
-    participant CF as Cloudflare AI
     participant DB as MongoDB
 
     User->>FE: Enter title, paste content, select tone
     User->>FE: Click "Initialize Engine"
     FE->>BE: POST /api/repurpose-all [FormData + JWT]
-    BE->>Auth: Verify JWT token
-    Auth-->>BE: User verified (req.user)
     BE->>Eng: repurposeAll(req, res)
     Eng-->>FE: SSE: "Initializing Engine... 5%"
 
@@ -194,33 +143,22 @@ sequenceDiagram
     else Type = Blog
         Eng->>Media: processBlogLink(url)
         Media-->>Eng: Scraped text
-    else Type = File (Audio/Video)
-        Eng->>Media: uploadToCloudinary(filePath)
-        Eng->>AI: groq.audio.transcriptions(file)
-        AI-->>Eng: Transcript text
-    else Type = PDF
-        Eng->>Media: parsePdf(filePath)
-        Media-->>Eng: Parsed text
     else Type = Text
         Eng->>Eng: Use raw input directly
     end
 
     Eng-->>FE: SSE: "Content Secured. Starting AI Synthesis... 20%"
 
-    loop For each of 12 platforms
+    loop For each platform
         Eng->>AI: generatePlatformText(platform, text, tone, useHashtags)
         AI-->>Eng: Generated post
         Eng-->>FE: SSE: partialResult[platform] = content
     end
 
     Eng-->>FE: SSE: "Archiving to Vault... 98%"
-    Eng->>DB: project.save() → MongoDB 'projects' collection
-    DB-->>Eng: Project saved with _id
-
-    Eng-->>FE: SSE: { success, bundle, projectId, progress: 100 }
-    FE->>CF: POST /generate-image (using mission title)
-    CF-->>FE: base64 image
-    FE->>FE: Display all ResultCards + AI Image
+    Eng->>DB: project.save()
+    DB-->>Eng: Project saved
+    Eng-->>FE: SSE: { success: true, progress: 100 }
 ```
 
 ---
@@ -231,35 +169,35 @@ Shows the top-level system interactions with external entities.
 
 ```mermaid
 flowchart TB
-    User(["User"])
-    Admin(["Admin Admin"])
-    Groq(["Groq API"])
-    Cloudinary(["Cloudinary"])
-    Cloudflare(["Cloudflare Workers AI"])
-    MongoDB(["MongoDB Atlas"])
-    YouTube(["YouTube"])
-    Web(["Web Pages"])
+    U[User]
+    A[Admin]
+    G[Groq API]
+    C[Cloudinary]
+    CF[Cloudflare Workers AI]
+    M[MongoDB Atlas]
+    YT[YouTube]
+    W[Web Pages]
 
-    User -- "Content + Settings" --> ECHOLY["⚡ ECHOLY System"]
-    ECHOLY -- "Generated Posts + AI Image" --> User
+    U -- "Content + Settings" --> ECHOLY[ECHOLY System]
+    ECHOLY -- "Generated Posts + AI Image" --> U
 
-    Admin -- "Dashboard Requests" --> ECHOLY
-    ECHOLY -- "User + Project Stats" --> Admin
+    A -- "Dashboard Requests" --> ECHOLY
+    ECHOLY -- "User + Project Stats" --> A
 
-    ECHOLY -- "Text Prompts" --> Groq
-    Groq -- "AI-Generated Posts" --> ECHOLY
+    ECHOLY -- "Text Prompts" --> G
+    G -- "AI-Generated Posts" --> ECHOLY
 
-    ECHOLY -- "Media Files" --> Cloudinary
-    Cloudinary -- "Secure CDN URLs" --> ECHOLY
+    ECHOLY -- "Media Files" --> C
+    C -- "Secure CDN URLs" --> ECHOLY
 
-    ECHOLY -- "Image Prompts" --> Cloudflare
-    Cloudflare -- "Generated PNG" --> ECHOLY
+    ECHOLY -- "Image Prompts" --> CF
+    CF -- "Generated PNG" --> ECHOLY
 
-    ECHOLY -- "CRUD Operations" --> MongoDB
-    MongoDB -- "Documents + History" --> ECHOLY
+    ECHOLY -- "CRUD Operations" --> M
+    M -- "Documents + History" --> ECHOLY
 
-    YouTube -- "Video Metadata/Transcript" --> ECHOLY
-    Web -- "Scraped HTML Content" --> ECHOLY
+    YT -- "Video Metadata/Transcript" --> ECHOLY
+    W -- "Scraped HTML Content" --> ECHOLY
 ```
 
 ---
@@ -270,54 +208,34 @@ Breaks down the internal processes within the Echoly backend.
 
 ```mermaid
 flowchart LR
-    subgraph Input Sources
-        D1[(YouTube Link)]
-        D2[(Blog URL)]
-        D3[(File Upload)]
-        D4[(Raw Text)]
+    subgraph Input_Sources
+        D1[YouTube Link]
+        D2[Blog URL]
+        D4[Raw Text]
     end
 
-    subgraph Process 1: Content Extraction
+    subgraph Content_Extraction
         P1A[yt-dlp Downloader]
         P1B[Cheerio Web Scraper]
-        P1C[Multer + Groq Whisper]
-        P1D[pdf-parse / text reader]
+        P1D[text reader]
     end
 
-    subgraph Process 2: AI Synthesis Engine
+    subgraph AI_Synthesis_Engine
         P2[Groq Llama3 Generator]
         P2A[Platform Prompt Builder]
-        P2B[12x Platform Posts]
+        P2B[Platform Posts]
     end
 
-    subgraph Process 3: Visual Engine
-        P3A[Groq Image Prompt Creator]
-        P3B[Cloudflare SDXL Lightning]
-        P3C[Base64 PNG Output]
-    end
-
-    subgraph Process 4: Persistence Layer
+    subgraph Persistence_Layer
         P4[Mongoose Project Model]
         DB1[(MongoDB Projects)]
     end
 
-    subgraph Process 5: Auth & Security
-        P5A[JWT Verifier]
-        P5B[bcrypt Password Hasher]
-        DB2[(MongoDB Users)]
-    end
-
     D1 --> P1A --> P2
     D2 --> P1B --> P2
-    D3 --> P1C --> P2
     D4 -->        P2
 
     P2 --> P2A --> P2B --> P4 --> DB1
-    P2B --> P3A --> P3B --> P3C
-
-    P5A --> P2
-    DB2 --> P5A
-    P5B --> DB2
 ```
 
 ---
@@ -328,47 +246,27 @@ Describes the functional capabilities by user role.
 
 ```mermaid
 flowchart LR
-    User(["Regular User"])
-    Admin(["Admin"])
+    User[Regular User]
+    Admin[Admin]
 
-    subgraph Echoly Platform
-        UC1["Register / Login"]
-        UC2["Enter Content Source"]
-        UC3["Select Tone & Settings"]
-        UC4["Toggle Hashtags"]
-        UC5["Name Mission (Title)"]
-        UC6["Generate Content Bundle"]
-        UC7["View Real-time Progress"]
-        UC8["Edit / Copy / Share Posts"]
-        UC9["Regenerate Single Platform"]
-        UC10["Generate AI Visual Image"]
-        UC11["View Asset History"]
-        UC12["Restore Past Project"]
-        UC13["Delete Project / Asset"]
-        UC14["Download Export Report"]
-        UC15["View All Users (Admin)"]
-        UC16["Monitor All Projects (Admin)"]
-        UC17["Manage User Roles (Admin)"]
+    subgraph Echoly_Platform
+        UC1[Register / Login]
+        UC2[Enter Content Source]
+        UC3[Select Tone]
+        UC6[Generate Content Bundle]
+        UC11[View Asset History]
+        UC15[View All Users]
+        UC16[Monitor All Projects]
     end
 
     User --> UC1
     User --> UC2
     User --> UC3
-    User --> UC4
-    User --> UC5
     User --> UC6
-    User --> UC7
-    User --> UC8
-    User --> UC9
-    User --> UC10
     User --> UC11
-    User --> UC12
-    User --> UC13
-    User --> UC14
     Admin --> UC1
     Admin --> UC15
     Admin --> UC16
-    Admin --> UC17
 ```
 
 ---
@@ -379,90 +277,38 @@ Illustrates the deployment and layered architecture.
 
 ```mermaid
 flowchart TB
-    subgraph Client ["Frontend Layer React"]
-        A1[Dashboard.js] --> A2[EngineWorkspace.js]
-        A1 --> A3[VaultArchive.js]
-        A1 --> A4[AdminDashboard.js]
-        A1 --> A5[ResultCard.js]
+    subgraph Client_Frontend ["Frontend Layer (React)"]
+        A1[Dashboard]
+        A2[Engine Workspace]
+        A3[Vault Archive]
     end
 
-    subgraph Server ["Backend Layer Express Nodejs"]
-        B1[index.js - Server Entry] --> B2[authRoute.js]
-        B1 --> B3[engineRoute.js]
-        B1 --> B4[projectRoute.js]
-        B1 --> B5[adminRoute.js]
-
-        B2 --> C1[authController.js]
-        B3 --> C2[engineController.js]
-        B4 --> C3[projectController.js]
-        B5 --> C4[adminController.js]
-
-        C2 --> D1[aiService.js]
-        C2 --> D2[mediaService.js]
+    subgraph Server_Backend ["Backend Layer (Express)"]
+        B1[API Router]
+        B2[Auth Controller]
+        B3[Engine Controller]
+        B4[AI Service]
     end
 
-    subgraph External ["External APIs"]
-        E1[Groq LLM API]
-        E2[Groq Whisper API]
-        E3[Cloudinary CDN]
-        E4[Cloudflare Workers AI]
-        E5[YouTube / yt-dlp]
+    subgraph External_APIs ["External Services"]
+        E1[Groq API]
+        E2[Cloudinary]
+        E3[Cloudflare AI]
     end
 
-    subgraph Database ["Data Layer MongoDB Atlas"]
-        F1[(users collection)]
-        F2[(projects collection)]
+    subgraph Database_Layer ["Data Layer (MongoDB)"]
+        F1[(Atlas Cluster)]
     end
 
-    Client -- "HTTP / SSE" --> Server
-    D1 <--> E1
-    D1 <--> E2
-    D2 <--> E3
-    D1 <--> E4
-    D2 <--> E5
-    C1 <--> F1
-    C2 <--> F2
-    C3 <--> F2
-    C4 <--> F1
-    C4 <--> F2
+    A1 --> B1
+    B1 --> B2
+    B1 --> B3
+    B3 --> B4
+    B4 --> E1
+    B4 --> E3
+    B3 --> F1
 ```
 
 ---
 
-## 8. Authentication Flow Diagram
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant FE as Frontend
-    participant Auth as Auth Controller
-    participant DB as MongoDB
-
-    User->>FE: Input email + password
-    FE->>Auth: POST /api/auth/login
-    Auth->>DB: Find user by email
-    DB-->>Auth: User document
-    Auth->>Auth: bcrypt.compare(password, hash)
-
-    alt Password matches
-        Auth->>Auth: jwt.sign({ id, isAdmin }, secret)
-        Auth-->>FE: { token, user: { name, isAdmin } }
-        FE->>FE: localStorage.setItem("token", token)
-        FE->>FE: Redirect to /dashboard
-    else Password mismatch
-        Auth-->>FE: 401 - Invalid credentials
-        FE->>FE: Show error notification
-    end
-
-    Note over FE,Auth: Subsequent API requests use<br/>"x-auth-token: Bearer {token}" header
-
-    FE->>Auth: GET /api/auth/me [x-auth-token]
-    Auth->>Auth: jwt.verify(token, secret)
-    Auth->>DB: findById(decoded.id)
-    DB-->>Auth: User document
-    Auth-->>FE: User data { name, email, isAdmin }
-```
-
----
-
-*Diagrams generated for Echoly v1.0 — March 2026*
+*Documentation updated for Echoly v1.0 — March 2026*
