@@ -3,7 +3,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
@@ -11,6 +11,9 @@ const authRoutes = require('./routes/authRoute');
 const projectRoutes = require('./routes/projectRoute');
 const adminRoutes = require('./routes/adminRoute');
 const engineRoutes = require('./routes/engineRoute');
+
+console.log(`[SYSTEM] Starting server from: ${__dirname}`);
+console.log(`[DATABASE] Target URI: ${process.env.MONGO_URI ? process.env.MONGO_URI.split('@')[1] : 'UNDEFINED'}`);
 
 // --- 1. BULLETPROOF CORS SETUP ---
 app.use((req, res, next) => {
@@ -51,9 +54,33 @@ const cleanTempFolder = () => {
 cleanTempFolder();
 
 // --- DATABASE CONNECTION ---
-mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/repurposer')
-    .then(() => console.log('✅ Connected to MongoDB'))
-    .catch(err => console.error('❌ MongoDB Connection Error:', err));
+const connectDB = async () => {
+    try {
+        const uri = process.env.MONGO_URI;
+        if (!uri) {
+            console.error('❌ MONGO_URI is not defined in environment variables.');
+            return;
+        }
+
+        console.log(`[DATABASE] Attempting to connect to: ${uri.split('@')[1] || 'URL Hidden'}`);
+        
+        await mongoose.connect(uri, {
+            serverSelectionTimeoutMS: 5000, // Fail after 5 seconds instead of 30
+            socketTimeoutMS: 45000,
+        });
+        
+        console.log('✅ Connected to MongoDB established successfully');
+    } catch (err) {
+        console.error('❌ FATAL: MongoDB Connection Failed');
+        console.error(`Reason: ${err.message}`);
+        // Log more details if it's a timeout
+        if (err.name === 'MongooseServerSelectionError') {
+            console.error('Tip: Check if your Railway database is active and accepting connections from your current IP.');
+        }
+    }
+};
+
+connectDB();
 
 // --- ROUTE MOUNTING ---
 app.use('/api/auth', authRoutes);

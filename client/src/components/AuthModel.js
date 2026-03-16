@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { X, Mail, Lock, UserPlus, LogIn } from 'lucide-react';
+import { X, Mail, Lock, UserPlus, LogIn, AlertCircle } from 'lucide-react';
+import axios from 'axios';
 
 export default function AuthModal({ type, onClose, onAuthSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
   const isLogin = type === 'login';
 
   const handleSubmit = async (e) => {
@@ -11,15 +12,12 @@ export default function AuthModal({ type, onClose, onAuthSuccess }) {
         const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
         
         try {
+            setError(null);
             const res = await axios.post(`http://localhost:10000${endpoint}`, { email, password });
-            
-            // Save the "Digital ID Card" in the browser's memory
             localStorage.setItem('token', res.data.token);
-            
-            // Tell App.js we are logged in!
             onAuthSuccess(res.data.user);
         } catch (err) {
-            alert(err.response?.data?.msg || "Authentication failed");
+            setError(err.response?.data?.msg || "Authentication failed. Double check your protocols.");
         }
     };
 
@@ -44,6 +42,13 @@ export default function AuthModal({ type, onClose, onAuthSuccess }) {
               {isLogin ? 'Enter your credentials' : 'Create your secure account'}
             </p>
           </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <AlertCircle size={14} className="text-red-600" />
+              <p className="text-[11px] font-bold text-red-600 uppercase tracking-tight">{error}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="relative">

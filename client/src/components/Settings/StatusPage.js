@@ -47,10 +47,10 @@ export default function StatusPage({ user }) {
   }, []);
 
   const services = [
-    { title: "Core API Gateway", status: "Operational", icon: Globe, latency: 42, color: { bg: "bg-blue-50", text: "text-blue-600" } },
-    { title: "Transcription Engine", status: "Operational", icon: Cpu, latency: 128, color: { bg: "bg-indigo-50", text: "text-indigo-600" } },
-    { title: "Visual Generation", status: "Operational", icon: Zap, latency: 850, color: { bg: "bg-amber-50", text: "text-amber-600" } },
-    { title: "Vault Storage", status: "Operational", icon: HardDrive, latency: 12, color: { bg: "bg-purple-50", text: "text-purple-600" } },
+    { title: "Llama 3.1 Model (Groq)", status: "Operational", icon: Globe, latency: 42, color: { bg: "bg-blue-50", text: "text-blue-600" } },
+    { title: "Whisper-Large-V3", status: "Operational", icon: Cpu, latency: 128, color: { bg: "bg-indigo-50", text: "text-indigo-600" } },
+    { title: "SDXL-Lightning", status: "Operational", icon: Zap, latency: 850, color: { bg: "bg-amber-50", text: "text-amber-600" } },
+    { title: "Vault Architecture", status: "Operational", icon: HardDrive, latency: 12, color: { bg: "bg-purple-50", text: "text-purple-600" } },
   ];
 
   return (

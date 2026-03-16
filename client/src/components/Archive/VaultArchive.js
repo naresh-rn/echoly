@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:10000") + "/api";
 
-export default function VaultArchive({ projects, onRestore, fetchHistory, onDelete }) {
+export default function VaultArchive({ projects, onRestore, fetchHistory, onDelete, notify, setModal }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [deletingId, setDeletingId] = useState(null);
 
@@ -12,17 +12,25 @@ export default function VaultArchive({ projects, onRestore, fetchHistory, onDele
         project.title?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const deleteHistory = async () => {
-        if (window.confirm("PERMANENTLY CLEAR ASSET HISTORY?")) {
-            try {
-                await axios.delete(`${API_BASE}/history`, {
-                    headers: { 'x-auth-token': localStorage.getItem('token') }
-                });
-                fetchHistory();
-            } catch (e) {
-                alert("Failed to wipe vault.");
+    const deleteHistory = () => {
+        setModal({
+            isOpen: true,
+            title: "Clear Vault History",
+            message: "This will permanently wipe all previously generated assets from your history. This action cannot be reversed.",
+            type: 'danger',
+            confirmLabel: "Wipe Vault",
+            onConfirm: async () => {
+                try {
+                    await axios.delete(`${API_BASE}/history`, {
+                        headers: { 'x-auth-token': localStorage.getItem('token') }
+                    });
+                    fetchHistory();
+                    if (notify) notify({ message: "Asset vault cleared.", type: 'success' });
+                } catch (e) {
+                    if (notify) notify({ message: "Failed to wipe vault.", type: 'error' });
+                }
             }
-        }
+        });
     };
 
     const getSourceIcon = (type) => {

@@ -68,6 +68,7 @@ const deleteAllHistory = async (req, res) => {
     }
 };
 
+
 module.exports = {
     getHistory,
     updateAsset,

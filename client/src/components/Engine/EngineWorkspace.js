@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import ProgressStepper from './ProgressStepper'; 
 
-export default function EngineWorkspace({ onRepurpose, isGenerating, progress, statusText }) {
+export default function EngineWorkspace({ onRepurpose, isGenerating, progress, statusText, onCancel, notify }) {
   const [type, setType] = useState('text');
   const [content, setContent] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -48,11 +48,11 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, progress, s
 const handleInitialize = () => {
     // 1. Check if empty
     if (type !== 'file' && !content.trim()) {
-        alert("Please provide content or a URL.");
+        if (notify) notify({ message: "Mission Briefing Required: Paste script or URL.", type: 'error' });
         return;
     }
     if (type === 'file' && !selectedFile) {
-        alert("Please select a file first.");
+        if (notify) notify({ message: "Media Missing: Select a file to process.", type: 'error' });
         return;
     }
 
@@ -60,14 +60,14 @@ const handleInitialize = () => {
     if (type === 'youtube') {
         const isYT = content.includes('youtube.com') || content.includes('youtu.be');
         if (!isYT) {
-            alert("Please enter a valid YouTube link.");
+            if (notify) notify({ message: "Invalid Source: Only YouTube links supported.", type: 'error' });
             return;
         }
     }
 
     // 3. Simple Blog Validation
     if (type === 'blog' && !content.startsWith('http')) {
-        alert("Please enter a full URL (starting with http/https).");
+        if (notify) notify({ message: "Full URL Needed: Must start with http/https.", type: 'error' });
         return;
     }
 
@@ -231,7 +231,7 @@ const handleInitialize = () => {
       {isGenerating && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-50 px-6">
            <div className="w-full max-w-md p-8 rounded-2xl bg-white border border-slate-100 shadow-xl">
-              <ProgressStepper progress={progress} statusText={statusText} />
+              <ProgressStepper progress={progress} statusText={statusText} onCancel={onCancel} />
               <div className="mt-6 flex items-center justify-center gap-2 text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400">
                 <Sparkles size={12} className="animate-pulse" />
                 <span>Generating your assets</span>

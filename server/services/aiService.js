@@ -21,7 +21,7 @@ const PLATFORMS_CONFIG = [
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function generatePlatformText(platformId, text, tone, useHashtags = false) {
+async function generatePlatformText(platformId, text, tone, useHashtags = false, brandVoice = "") {
     const config = PLATFORMS_CONFIG.find(p => p.id === platformId);
     let attempts = 0;
     const maxAttempts = 3;
@@ -29,6 +29,7 @@ async function generatePlatformText(platformId, text, tone, useHashtags = false)
     let systemPrompt = `
         ${config.prompt} 
         Tone: ${tone}. 
+        ${brandVoice ? `USER BRAND VOICE / GUIDELINES: "${brandVoice}" - STRICTLY ADHERE TO THIS STYLE.` : ''}
         IMPORTANT: The source text may be from a PDF or Scraper and contain messy artifacts like page numbers, headers, or broken lines. 
         IGNORE any metadata/headers and focus ONLY on the core message. 
         Return ONLY the final post. No markdown headers.

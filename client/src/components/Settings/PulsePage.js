@@ -51,9 +51,9 @@ export default function PulsePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard title="API Latency" value="42" sub="ms" icon={Globe} color={{bg:"bg-blue-50", text:"text-blue-600"}} />
+        <MetricCard title="Tokens Processed" value="1.2" sub="M" icon={Activity} color={{bg:"bg-blue-50", text:"text-blue-600"}} />
         <MetricCard title="AI Inference" value="0.8" sub="sec" icon={Zap} color={{bg:"bg-amber-50", text:"text-amber-600"}} />
-        <MetricCard title="Engine Load" value="14" sub="%" icon={Cpu} color={{bg:"bg-indigo-50", text:"text-indigo-600"}} />
+        <MetricCard title="Assets Generated" value="482" sub="total" icon={BarChart3} color={{bg:"bg-indigo-50", text:"text-indigo-600"}} />
         <MetricCard title="Vault Health" value="100" sub="%" icon={HardDrive} color={{bg:"bg-purple-50", text:"text-purple-600"}} />
       </div>
     </div>

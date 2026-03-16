@@ -32,5 +32,7 @@ const ProjectSchema = new mongoose.Schema({
     status: { type: String, default: 'COMPLETED' },
     createdAt: { type: Date, default: Date.now }
 }, { collection: 'projects' });
+// Add compound index for fast queries by user and sort by creation date
+ProjectSchema.index({ userId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Project', ProjectSchema);

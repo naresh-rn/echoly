@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ProgressStepper = ({ progress, statusText }) => {
+const ProgressStepper = ({ progress, statusText, onCancel }) => {
   return (
     <div className="w-full">
       <div className="flex justify-between items-end mb-2">
@@ -24,6 +24,15 @@ const ProgressStepper = ({ progress, statusText }) => {
           style={{ width: `${progress}%` }}
         />
       </div>
+      
+      {onCancel && (
+        <button 
+          onClick={onCancel}
+          className="mt-6 w-full py-2.5 rounded-xl border border-red-100 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all"
+        >
+          Cancel Generation
+        </button>
+      )}
     </div>
   );
 };

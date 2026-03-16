@@ -14,6 +14,10 @@ import StatusPage from './Settings/StatusPage';
 import PulsePage from './Settings/PulsePage';
 import AdminDashboard from './Admin/AdminDashboard';
 
+// UI Components
+import Modal from './UI/Modal';
+import Notification from './UI/Notification';
+
 export default function Dashboard({ user, setUser }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,9 +30,14 @@ export default function Dashboard({ user, setUser }) {
   const [statusText, setStatusText] = useState("System Ready");
   const [progress, setProgress] = useState(0); 
   const [history, setHistory] = useState([]);
+  const abortControllerRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [currentProjectId, setCurrentProjectId] = useState(null);
   const [currentTitle, setCurrentTitle] = useState("");
+
+  // UI State
+  const [notification, setNotification] = useState(null);
+  const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'info' });
 
   const bundleRef = useRef({});
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:10000") + "/api";
@@ -61,6 +70,10 @@ export default function Dashboard({ user, setUser }) {
       setProgress(5);
       setStatusText("Initializing Connection...");
       
+      let wasCancelled = false;
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      abortControllerRef.current = new AbortController();
+
       if (type === 'text') setRawText(content);
 
       const formData = new FormData();
@@ -76,7 +89,8 @@ export default function Dashboard({ user, setUser }) {
           const response = await fetch(`${API_BASE}/repurpose-all`, {
               method: 'POST',
               body: formData,
-              headers: { 'x-auth-token': token }
+              headers: { 'x-auth-token': token },
+              signal: abortControllerRef.current?.signal
           });
 
           if (!response.body) throw new Error("Connection failed");
@@ -117,27 +131,33 @@ export default function Dashboard({ user, setUser }) {
             }
           }
       } catch (e) {
-          setStatusText("Processing Error");
-          alert("Error: " + e.message);
+          if (e.name === 'AbortError') {
+              wasCancelled = true;
+              setStatusText("Generation Cancelled");
+          } else {
+              setStatusText("Processing Error");
+              setNotification({ message: "Engine Failure: " + e.message, type: 'error' });
+          }
       } finally {
-          setProgress(100);
-          setStatusText("Finalizing Assets...");
-          // setTimeout(async () => {
-          //     setIsGenerating(false);
-          //     if (Object.keys(bundleRef.current).length === 0) {
-          //         const latestHistory = await fetchHistory();
-          //         if (latestHistory && latestHistory.length > 0) handleRestore(latestHistory[0]);
-          //     } else {
-          //         fetchHistory();
-          //     }
-          // }, 1000);
+          if (!wasCancelled) {
+              setProgress(100);
+              setStatusText("Finalizing Assets...");
+          }
+          
+          abortControllerRef.current = null;
+
           setTimeout(async () => {
               setIsGenerating(false);
-              fetchHistory();
-              
-              // Automatically trigger image generation if we have a title
-              if (title && title.trim()) {
-                  handleGenerateImage(title);
+              if (!wasCancelled) {
+                  fetchHistory();
+                  
+                  // Automatically trigger image generation if we have a title
+                  if (title && title.trim()) {
+                      handleGenerateImage(title);
+                  }
+              } else {
+                  setStatusText("System Ready");
+                  setProgress(0);
               }
           }, 1000);
       }
@@ -232,17 +252,33 @@ const handleRestore = (project) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-  const handleDownloadAll = () => {
+  const handleDownloadMarkdown = () => {
     if (!bundle) return;
-    let fileContent = `ECHOLY REPORT\nDate: ${new Date().toLocaleString()}\n\n`;
-    Object.entries(bundle).forEach(([platform, content]) => { fileContent += `--- ${platform.toUpperCase()} ---\n\n${content}\n\n`; });
-    const blob = new Blob([fileContent], { type: 'text/plain' });
+    let fileContent = `# Echoly Generation Report\n**Date:** ${new Date().toLocaleString()}\n\n`;
+    Object.entries(bundle).forEach(([platform, content]) => { 
+        fileContent += `## ${platform.toUpperCase()}\n\n${content}\n\n---\n\n`; 
+    });
+    const blob = new Blob([fileContent], { type: 'text/markdown' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `Echoly_Assets.txt`;
+    link.download = `Echoly_Assets.md`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleCopyAll = async () => {
+    if (!bundle) return;
+    let allContent = "";
+    Object.entries(bundle).forEach(([platform, content]) => {
+      allContent += `[${platform.toUpperCase()}]\n${content}\n\n`;
+    });
+    try {
+      await navigator.clipboard.writeText(allContent);
+      setNotification({ message: "All content copied to clipboard!", type: 'success' });
+    } catch (err) {
+      setNotification({ message: "Failed to copy content.", type: 'error' });
+    }
   };
 
   const handleGenerateImage = async (content) => {
@@ -256,13 +292,31 @@ const handleRestore = (project) => {
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE}/generate-image`, { prompt: imagePrompt }, { headers: { 'x-auth-token': token } });
       setGeneratedImage(`data:${res.data.mimeType};base64,${res.data.imageData}`);
-    } catch (error) { alert("Visual Engine is busy."); } finally { setIsGenerating(false); }
+      setNotification({ message: "AI Graphic Synced Successfully", type: 'success' });
+    } catch (error) { 
+      setNotification({ message: "Visual Engine is busy. Try again later.", type: 'error' });
+    } finally { setIsGenerating(false); }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-    navigate('/');
+    setModal({
+      isOpen: true,
+      title: "Confirm Log Out",
+      message: "Are you sure you want to log out of your Echoly session? You will need to sign in again to access your engine.",
+      type: 'info',
+      confirmLabel: "Log Out",
+      onConfirm: () => {
+        localStorage.removeItem('token');
+        setUser(null);
+        navigate('/');
+      }
+    });
+  };
+
+  const handleCancelGeneration = () => {
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
   };
 
   // Sidebar Helper
@@ -353,7 +407,9 @@ const handleRestore = (project) => {
               <div>
                 <div className="flex items-center gap-2 text-slate-400 text-[9px] font-bold uppercase tracking-widest mb-1">
                   <span>ECHOLY</span> <ChevronRight size={8} /> 
-                  <span className="text-slate-900">{location.pathname.includes('vault') ? 'HISTORY' : 'ENGINE'}</span>
+                  <span className="text-slate-900">
+                    {location.pathname.includes('vault') ? 'HISTORY' : 'ENGINE'}
+                  </span>
                 </div>
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">
                   {location.pathname.includes('vault') ? 'Asset History' : 'Engine Workspace'}
@@ -361,9 +417,14 @@ const handleRestore = (project) => {
               </div>
 
               {bundle && Object.keys(bundle).length > 0 && !isGenerating && location.pathname === "/dashboard" && (
-                <button onClick={handleDownloadAll} className="flex items-center justify-center gap-2 bg-black text-white px-5 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-800 transition-all shadow-sm">
-                  <Download size={14} /> Export Report
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={handleCopyAll} className="flex items-center justify-center gap-2 bg-slate-100 text-slate-900 px-5 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-200 transition-all shadow-sm">
+                    <Activity size={14} /> Copy All
+                  </button>
+                  <button onClick={handleDownloadMarkdown} className="flex items-center justify-center gap-2 bg-black text-white px-5 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-800 transition-all shadow-sm">
+                    <Download size={14} /> Download .md
+                  </button>
+                </div>
               )}
             </div>
 
@@ -376,6 +437,8 @@ const handleRestore = (project) => {
                       isGenerating={isGenerating} 
                       progress={progress} 
                       statusText={statusText} 
+                      onCancel={handleCancelGeneration}
+                      notify={setNotification}
                     />
                     
                     {generatedImage && (
@@ -404,14 +467,16 @@ const handleRestore = (project) => {
                             onGenerateImage={() => handleGenerateImage(c)} 
                             onDelete={() => handleDeleteAsset(p)}
                             onUpdate={handleUpdateAsset}
+                            setNotification={setNotification}
+                            setModal={setModal}
                           />
                         ))}
                       </div>
                     )}
                   </div>
                 } />
-                <Route path="/vault" element={<VaultArchive projects={history} onRestore={handleRestore} fetchHistory={fetchHistory} onDelete={async (id) => { await axios.delete(`${API_BASE}/projects/${id}`, { headers: { 'x-auth-token': localStorage.getItem('token') } }); fetchHistory(); }} />} />
-                <Route path="/settings" element={<SettingsPage user={user} />} />
+                <Route path="/vault" element={<VaultArchive projects={history} onRestore={handleRestore} fetchHistory={fetchHistory} onDelete={async (id) => { await axios.delete(`${API_BASE}/projects/${id}`, { headers: { 'x-auth-token': localStorage.getItem('token') } }); fetchHistory(); }} notify={setNotification} setModal={setModal} />} />
+                <Route path="/settings" element={<SettingsPage user={user} setUser={setUser} />} />
                 <Route path="/pulse" element={<PulsePage />} />
                 <Route path="/status" element={<StatusPage user={user} />} />
                 {user?.isAdmin && (
@@ -422,6 +487,18 @@ const handleRestore = (project) => {
           </div>
         </main>
       </div>
+
+      <Modal 
+        {...modal} 
+        onClose={() => setModal({ ...modal, isOpen: false })} 
+      />
+
+      {notification && (
+        <Notification 
+          {...notification} 
+          onClose={() => setNotification(null)} 
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Project = require('../models/Project');
+const cloudinary = require('cloudinary').v2;
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
@@ -52,4 +54,67 @@ const getMe = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser, getMe };
+const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // 1. Find all projects to clean up Cloudinary assets
+        const projects = await Project.find({ userId });
+        for (const project of projects) {
+            if (project.source && project.source.publicId) {
+                try {
+                    await cloudinary.uploader.destroy(project.source.publicId);
+                } catch (cloudinaryErr) {
+                    console.error(`Failed to delete cloudinary asset ${project.source.publicId}:`, cloudinaryErr);
+                }
+            }
+        }
+
+        // 2. Delete all projects
+        await Project.deleteMany({ userId });
+
+        // 3. Delete the user
+        await User.findByIdAndDelete(userId);
+
+        res.json({ success: true, message: "Account and associated data deleted permanently." });
+    } catch (err) {
+        console.error("Account Deletion Error:", err);
+        res.status(500).json({ msg: 'Server error during account deletion' });
+    }
+};
+
+const updateBrandVoice = async (req, res) => {
+    try {
+        const { brandVoice } = req.body;
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: { brandVoice } },
+            { new: true }
+        ).select('-password');
+        
+        res.json({ success: true, brandVoice: user.brandVoice });
+    } catch (err) {
+        res.status(500).json({ msg: 'Failed to update brand voice' });
+    }
+};
+
+const updatePassword = async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) return res.status(400).json({ msg: 'Invalid current password' });
+
+        user.password = newPassword; // Mongoose middleware will hash this
+        await user.save();
+
+        res.json({ success: true, msg: 'Password updated successfully' });
+    } catch (err) {
+        console.error("Update Password Error:", err);
+        res.status(500).json({ msg: 'Server error during password update' });
+    }
+};
+
+module.exports = { registerUser, loginUser, getMe, deleteAccount, updateBrandVoice, updatePassword };

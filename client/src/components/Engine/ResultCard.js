@@ -18,7 +18,9 @@ export default function ResultCard({
   isGenerating, 
   onRegenerate, 
   onGenerateImage,
-  onDelete 
+  onDelete,
+  setNotification,
+  setModal
 }) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -52,14 +54,19 @@ export default function ResultCard({
       }
     } else {
       handleCopy(); 
-      alert("Copied to clipboard (Share not supported on this device).");
+      setNotification({ message: "Content copied (Share and supported on this device).", type: 'info' });
     }
   };
 
   const handleDelete = () => {
-    if (window.confirm("Delete this asset?")) {
-      onDelete();
-    }
+    setModal({
+      isOpen: true,
+      title: "Delete Asset",
+      message: `Are you sure you want to delete this ${platform} asset? This action is permanent.`,
+      type: 'danger',
+      confirmLabel: "Delete Asset",
+      onConfirm: onDelete
+    });
   };
 
   return (

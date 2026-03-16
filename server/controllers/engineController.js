@@ -1,5 +1,6 @@
 const fs = require('fs');
 const Project = require('../models/Project');
+const User = require('../models/User');
 const { generatePlatformText, PLATFORMS_CONFIG, groq, sleep, generateImagePrompt, generateImage } = require('../services/aiService');
 const { processYoutubeLink, processBlogLink, uploadToCloudinary, parsePdf } = require('../services/mediaService');
 
@@ -12,6 +13,14 @@ const repurposeAll = async (req, res) => {
     const filePath = req.file ? req.file.path : null;
 
     try {
+        const user = await User.findById(req.user.id);
+        const brandVoice = user?.brandVoice || "";
+
+        let isCancelled = false;
+        req.on('close', () => {
+            isCancelled = true;
+        });
+
         const { type, content, tone, includeHashtags } = req.body;
         const useHashtags = includeHashtags === 'true' || includeHashtags === true;
 
@@ -75,11 +84,15 @@ const repurposeAll = async (req, res) => {
         const bundle = {};
 
         for (let i = 0; i < PLATFORMS_CONFIG.length; i++) {
+            if (isCancelled) {
+                console.log("⚠️ GENERATION CANCELLED BY USER");
+                return res.end();
+            }
             const p = PLATFORMS_CONFIG[i];
             const currentProgress = 20 + Math.round(((i + 1) / PLATFORMS_CONFIG.length) * 75);
 
             try {
-                const aiResult = await generatePlatformText(p.id, textToProcess, tone, useHashtags);
+                const aiResult = await generatePlatformText(p.id, textToProcess, tone, useHashtags, brandVoice);
 
                 sendUpdate({
                     status: `Generated ${p.id.toUpperCase()} Asset`,
@@ -149,11 +162,15 @@ const repurposeSingle = async (req, res) => {
 
         const useHashtags = includeHashtags === true || includeHashtags === 'true';
 
+        const user = await User.findById(req.user.id);
+        const brandVoice = user?.brandVoice || "";
+
         const newContent = await generatePlatformText(
             platformId.toLowerCase(), 
             project.source.rawTranscript, 
             tone || 'PROFESSIONAL',
-            useHashtags
+            useHashtags,
+            brandVoice
         );
 
         await Project.findOneAndUpdate(
