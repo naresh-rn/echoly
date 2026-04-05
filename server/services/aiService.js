@@ -2,7 +2,32 @@ const Groq = require('groq-sdk');
 const axios = require('axios');
 require('dotenv').config();
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Primary Groq Instances
+const groq        = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groqVisual  = new Groq({ apiKey: process.env.GROQ_API_KEY_VISUAL  || process.env.GROQ_API_KEY });
+const groqYoutube = new Groq({ apiKey: process.env.GROQ_API_KEY_YOUTUBE || process.env.GROQ_API_KEY });
+const groqContent = new Groq({ apiKey: process.env.GROQ_API_KEY_CONTENT || process.env.GROQ_API_KEY });
+
+// ─── Round-Robin Content Key Pool ────────────────────────────────────────────
+// Spreads 12 platform generations across all available API keys to avoid
+// hitting the per-key per-minute token limit.
+const contentKeyPool = [
+    process.env.GROQ_API_KEY_CONTENT,
+    process.env.GROQ_API_KEY,
+    process.env.GROQ_API_KEY_VISUAL,
+    process.env.GROQ_API_KEY_YOUTUBE,
+].filter(k => k && !k.includes('dummy')); // remove missing or dummy keys
+
+const groqPool = contentKeyPool.length > 0
+    ? contentKeyPool.map(k => new Groq({ apiKey: k }))
+    : [groqContent]; // fallback to single instance
+
+let poolIndex = 0;
+function nextGroqClient() {
+    const client = groqPool[poolIndex % groqPool.length];
+    poolIndex++;
+    return client;
+}
 
 const PLATFORMS_CONFIG = [
     { id: 'linkedin', prompt: "LinkedIn Ghostwriter. Use PAS framework. Professional hook. No markdown" },
@@ -21,17 +46,47 @@ const PLATFORMS_CONFIG = [
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+const MAX_INPUT_CHARS = 3500;
+
+async function summarizeIfNeeded(text) {
+    if (!text || typeof text !== 'string') return text;
+    text = text.replace(/\s+/g, ' ').trim();
+    if (text.length <= MAX_INPUT_CHARS) return text;
+
+    console.log(`📝 Text too long (${text.length} chars). Pre-summarizing...`);
+    try {
+        const response = await groqContent.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a highly capable AI summarizer. Summarize the following content in 300-400 words, preserving ALL key facts, quotes, context, and the core message. Ignore any random PDF artifacts or broken text. Return ONLY the summary, no preamble."
+                },
+                { role: "user", content: text.substring(0, 20000) }
+            ],
+            model: "llama-3.1-8b-instant",
+            max_tokens: 600,
+        });
+        const summary = response.choices[0].message.content.trim();
+        console.log(`✅ Summarized down to ${summary.length} chars.`);
+        return summary;
+    } catch (err) {
+        console.warn(`⚠️ Summarization failed, falling back to truncation:`, err.message);
+        return text.substring(0, MAX_INPUT_CHARS);
+    }
+}
+
 async function generatePlatformText(platformId, text, tone, useHashtags = false, brandVoice = "") {
     const config = PLATFORMS_CONFIG.find(p => p.id === platformId);
-    let attempts = 0;
-    const maxAttempts = 3;
+    if (!config) throw new Error(`Unknown platform: ${platformId}`);
+
+    const maxAttempts = 5; // more retries across the key pool
 
     let systemPrompt = `
-        ${config.prompt} 
-        Tone: ${tone}. 
+        ${config.prompt}
+        Tone: ${tone}.
         ${brandVoice ? `USER BRAND VOICE / GUIDELINES: "${brandVoice}" - STRICTLY ADHERE TO THIS STYLE.` : ''}
-        IMPORTANT: The source text may be from a PDF or Scraper and contain messy artifacts like page numbers, headers, or broken lines. 
-        IGNORE any metadata/headers and focus ONLY on the core message. 
+        IMPORTANT: The source text may be from a PDF or Scraper and contain messy artifacts like page numbers, headers, or broken lines.
+        IGNORE any metadata/headers and focus ONLY on the core message.
         Return ONLY the final post. No markdown headers.
     `;
 
@@ -39,17 +94,21 @@ async function generatePlatformText(platformId, text, tone, useHashtags = false,
         systemPrompt += "\nInclude 3-5 relevant and trending hashtags at the end of the post formatted correctly for the specific platform.";
     }
 
-    while (attempts < maxAttempts) {
-        try {
-            if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.includes('dummy')) {
-                await sleep(500);
-                return `[MOCKED ${platformId.toUpperCase()}] This is a dummy generated post for ${platformId} in a ${tone} tone based on your input: "${text.substring(0, 30)}...". Replace GROQ_API_KEY in server/.env with a real key to see actual AI generation!${useHashtags ? '\n\n#mockdata #test' : ''}`;
-            }
+    // Check if all keys are dummy/missing — return mock if so
+    const primaryKey = process.env.GROQ_API_KEY_CONTENT || process.env.GROQ_API_KEY;
+    if (primaryKey && primaryKey.includes('dummy') && contentKeyPool.length === 0) {
+        await sleep(500);
+        return `[MOCKED ${platformId.toUpperCase()}] Dummy post for ${platformId} (${tone}): "${text.substring(0, 30)}..."${useHashtags ? '\n\n#mockdata #test' : ''}`;
+    }
 
-            const completion = await groq.chat.completions.create({
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        // Pick the next key in the round-robin pool for each attempt
+        const client = nextGroqClient();
+        try {
+            const completion = await client.chat.completions.create({
                 messages: [
                     { role: "system", content: systemPrompt },
-                    { role: "user", content: text.substring(0, 15000) } 
+                    { role: "user",   content: text.substring(0, MAX_INPUT_CHARS) }
                 ],
                 model: "llama-3.1-8b-instant",
             });
@@ -58,23 +117,31 @@ async function generatePlatformText(platformId, text, tone, useHashtags = false,
             cleanResult = cleanResult.replace(/\*\*/g, '').replace(/#+/g, '#');
             return cleanResult;
         } catch (error) {
-            if (error.status === 429 && attempts < maxAttempts - 1) {
-                attempts++;
-                const waitTime = 2000 * attempts;
-                console.log(`🐢 Rate limit hit. Retrying in ${waitTime}ms...`);
+            if (error.status === 429) {
+                // Exponential backoff: 3s, 6s, 12s, 24s — and rotate to next key
+                const waitTime = Math.min(3000 * Math.pow(2, attempt), 30000);
+                console.log(`🐢 Rate limit on attempt ${attempt + 1}/${maxAttempts}. Rotating key & waiting ${waitTime}ms...`);
                 await sleep(waitTime);
             } else {
+                // Non-rate-limit error — bail immediately
+                console.error(`❌ generatePlatformText [${platformId}] error:`, error.message);
                 throw error;
             }
         }
     }
+
+    // All attempts exhausted — return a fallback string instead of throwing,
+    // so the rest of the 12 platforms can still complete.
+    console.warn(`⚠️ All ${maxAttempts} attempts failed for [${platformId}] — returning fallback.`);
+    return `[${platformId.toUpperCase()}] Content generation temporarily unavailable due to API rate limits. Please try regenerating this asset.`;
 }
 
 async function generateImagePrompt(content) {
-    if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.includes('dummy')) {
+    const currentApiKey = process.env.GROQ_API_KEY_VISUAL || process.env.GROQ_API_KEY;
+    if (currentApiKey && currentApiKey.includes('dummy')) {
         return "A highly detailed, cinematic mock render representing your text content.";
     }
-    const response = await groq.chat.completions.create({
+    const response = await groqVisual.chat.completions.create({
         messages: [
             {
                 role: "system",
@@ -89,6 +156,7 @@ async function generateImagePrompt(content) {
 }
 
 async function generateImage(prompt) {
+    const currentApiKey = process.env.GROQ_API_KEY_VISUAL || process.env.GROQ_API_KEY;
     if (process.env.CLOUDFLARE_API_TOKEN && process.env.CLOUDFLARE_API_TOKEN.includes('dummy')) {
         const dummyImage = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
         return { imageData: dummyImage, mimeType: "image/png" };
@@ -101,7 +169,7 @@ async function generateImage(prompt) {
         throw new Error("Cloudflare credentials missing.");
     }
 
-    const brainResponse = await groq.chat.completions.create({
+    const brainResponse = await groqVisual.chat.completions.create({
         messages: [
             { 
             role: "system", 
@@ -135,5 +203,9 @@ module.exports = {
     generateImage,
     PLATFORMS_CONFIG,
     sleep,
-    groq
+    summarizeIfNeeded,
+    groq,
+    groqVisual,
+    groqYoutube,
+    groqContent
 };

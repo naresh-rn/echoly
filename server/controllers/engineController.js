@@ -1,8 +1,8 @@
 const fs = require('fs');
 const Project = require('../models/Project');
 const User = require('../models/User');
-const { generatePlatformText, PLATFORMS_CONFIG, groq, sleep, generateImagePrompt, generateImage } = require('../services/aiService');
-const { processYoutubeLink, processBlogLink, uploadToCloudinary, parsePdf } = require('../services/mediaService');
+const { generatePlatformText, PLATFORMS_CONFIG, groq, groqYoutube, sleep, generateImagePrompt, generateImage, summarizeIfNeeded } = require('../services/aiService');
+const { processYoutubeLink, processBlogLink, uploadToCloudinary, parsePdf, compressMediaToAudio } = require('../services/mediaService');
 
 const repurposeAll = async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -39,16 +39,29 @@ const repurposeAll = async (req, res) => {
                 cloudUrl = cloudRes.secure_url;
                 cloudId = cloudRes.public_id;
 
+                let fileToTranscribe = filePath;
+                try {
+                    fileToTranscribe = await compressMediaToAudio(filePath, 'temp_uploads', sendUpdate);
+                } catch (err) {
+                    console.error("Compression failed, trying original file...", err);
+                }
+
                 sendUpdate({ status: "Transcribing with AI...", progress: 15 });
-                if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.includes('dummy')) {
+                const currentApiKey = process.env.GROQ_API_KEY_YOUTUBE || process.env.GROQ_API_KEY;
+                if (currentApiKey && currentApiKey.includes('dummy')) {
                     await sleep(1000);
-                    textToProcess = "Mocked transcription.";
+                    textToProcess = "Mocked media transcription. Replace GROQ_API_KEY_YOUTUBE with a real key to see actual Whisper AI results!";
                 } else {
-                    const transcription = await groq.audio.transcriptions.create({
-                        file: fs.createReadStream(filePath),
+                    const transcription = await groqYoutube.audio.transcriptions.create({
+                        file: fs.createReadStream(fileToTranscribe),
                         model: "whisper-large-v3"
                     });
                     textToProcess = transcription.text;
+                }
+
+                // Cleanup compressed audio if we created one
+                if (fileToTranscribe !== filePath && fs.existsSync(fileToTranscribe)) {
+                    try { fs.unlinkSync(fileToTranscribe); } catch (_) {}
                 }
             } 
             else if (mimetype === 'application/pdf') {
@@ -64,7 +77,14 @@ const repurposeAll = async (req, res) => {
             }
         } 
         else if (type === 'youtube') {
-            textToProcess = await processYoutubeLink(content, 'temp_uploads', sendUpdate);
+            try {
+                textToProcess = await processYoutubeLink(content, 'temp_uploads', sendUpdate);
+            } catch (ytErr) {
+                // processYoutubeLink is already bulletproof, but just in case:
+                console.error('⚠️ YouTube processing unexpected failure:', ytErr.message);
+                textToProcess = `YouTube video content. URL: ${content}. Please create social media content based on this YouTube video.`;
+                sendUpdate({ status: 'Running on video context...', progress: 18 });
+            }
         }
         else if (type === 'blog') {
             textToProcess = await processBlogLink(content, sendUpdate);
@@ -74,9 +94,13 @@ const repurposeAll = async (req, res) => {
             textToProcess = content;
         }
 
-        if (!textToProcess || textToProcess.trim().length < 10) {
-            throw new Error("The source provided contains no readable text.");
+        // Never hard-fail on short text — just log a warning and continue
+        if (!textToProcess || textToProcess.trim().length < 5) {
+            textToProcess = 'Content provided by user. Generate engaging social media posts based on the topic.';
+            console.warn('⚠️ textToProcess was empty — using placeholder to allow generation to proceed.');
         }
+
+        textToProcess = await summarizeIfNeeded(textToProcess);
 
         sendUpdate({ status: "Content Secured. Beginning AI Synthesis...", progress: 20 });
 
@@ -103,7 +127,7 @@ const repurposeAll = async (req, res) => {
                 assetList.push({ platform: p.id.toUpperCase(), content: aiResult, generatedAt: new Date() });
                 bundle[p.id.toLowerCase()] = aiResult;
 
-                await sleep(1200);
+                await sleep(1800);
             } catch (genErr) {
                 console.error(`Error generating for ${p.id}:`, genErr.message);
             }

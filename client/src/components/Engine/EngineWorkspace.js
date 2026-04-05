@@ -56,23 +56,24 @@ const handleInitialize = () => {
         return;
     }
 
-    // 2. Simple YouTube Validation
+    // 2. YouTube validation — just verify it's a YouTube domain; backend handles the rest
+    const trimmedContent = content.trim();
     if (type === 'youtube') {
-        const isYT = content.includes('youtube.com') || content.includes('youtu.be');
-        if (!isYT) {
-            if (notify) notify({ message: "Invalid Source: Only YouTube links supported.", type: 'error' });
+        const isYouTubeUrl = /youtube\.com|youtu\.be/i.test(trimmedContent);
+        if (!isYouTubeUrl) {
+            if (notify) notify({ message: "Please paste a YouTube link (youtube.com or youtu.be).", type: 'error' });
             return;
         }
     }
 
     // 3. Simple Blog Validation
-    if (type === 'blog' && !content.startsWith('http')) {
+    if (type === 'blog' && !trimmedContent.startsWith('http')) {
         if (notify) notify({ message: "Full URL Needed: Must start with http/https.", type: 'error' });
         return;
     }
 
-    // If all pass, start the engine
-    onRepurpose(type, type === 'file' ? selectedFile : content, tone, includeHashtags, title);
+    // If all pass, start the engine (always send trimmed content for URL types)
+    onRepurpose(type, type === 'file' ? selectedFile : trimmedContent, tone, includeHashtags, title);
 };
 
   const isInputReady = type === 'file' ? !!selectedFile : content.trim().length > 0;
