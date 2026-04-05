@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Lock, User, Bell, Info, Save, ShieldCheck, Trash2, AlertTriangle, Zap } from 'lucide-react';
+import { Lock, User, Info, Save, ShieldCheck, Trash2, AlertTriangle, Zap } from 'lucide-react';
 
 // UI Components
 import Modal from '../UI/Modal';
@@ -10,7 +10,9 @@ import Notification from '../UI/Notification';
 export default function SettingsPage({ user, setUser }) {
   const [passwords, setPasswords] = useState({ old: '', new: '', confirm: '' });
   const [brandVoice, setBrandVoice] = useState(user?.brandVoice || "");
+  const [apiKeys, setApiKeys] = useState({ groq: user?.apiKeys?.groq || "" });
   const [isSavingVoice, setIsSavingVoice] = useState(false);
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const navigate = useNavigate();
   const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:10000") + "/api/auth";
@@ -91,6 +93,22 @@ export default function SettingsPage({ user, setUser }) {
     }
   };
 
+  const handleSaveApiKeys = async () => {
+    setIsSavingKeys(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.put(`${API_BASE}/api-keys`, { apiKeys }, { headers: { 'x-auth-token': token } });
+      if (setUser) {
+        setUser(prev => ({ ...prev, apiKeys: res.data.apiKeys }));
+      }
+      setNotification({ message: "API Keys Updated Successfully", type: 'success' });
+    } catch (err) {
+      setNotification({ message: "Failed to save: " + (err.response?.data?.msg || err.message), type: 'error' });
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8 pb-20">
       
@@ -144,6 +162,38 @@ export default function SettingsPage({ user, setUser }) {
             className="w-full bg-black text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-purple-600 transition-all flex items-center justify-center gap-2"
           >
             {isSavingVoice ? "Saving Style..." : <><Save size={16}/> Save Voice Guidelines</>}
+          </button>
+        </div>
+      </section>
+
+      {/* 2.5 BYOK MODULE (Bring Your Own Key) */}
+      <section className="bg-white border border-slate-100 rounded-[32px] p-8 shadow-sm">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600"><Lock size={20}/></div>
+          <h3 className="font-black text-sm uppercase tracking-widest text-slate-800">API Key Overrides (BYOK)</h3>
+        </div>
+
+        <div className="space-y-4 max-w-md">
+          <p className="text-xs text-slate-500 leading-relaxed mb-4">
+            Bypass default platform rate limits (6,000 TPM) by supplying your own custom Groq API key here. Your keys are encrypted.
+          </p>
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Groq Console API Key</label>
+            <input 
+              type="password" 
+              placeholder="gsk_..."
+              value={apiKeys.groq}
+              className="w-full mt-2 bg-white border border-slate-200 rounded-2xl p-4 text-sm focus:border-emerald-400 outline-none transition-all"
+              onChange={(e) => setApiKeys({...apiKeys, groq: e.target.value})}
+            />
+          </div>
+          
+          <button 
+            onClick={handleSaveApiKeys}
+            disabled={isSavingKeys}
+            className="w-full bg-black text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 mt-4"
+          >
+            {isSavingKeys ? "Saving Credentials..." : <><Save size={16}/> Save Private Keys</>}
           </button>
         </div>
       </section>

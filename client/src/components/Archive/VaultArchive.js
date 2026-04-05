@@ -7,10 +7,25 @@ const API_BASE = (process.env.REACT_APP_API_URL || "http://localhost:10000") + "
 export default function VaultArchive({ projects, onRestore, fetchHistory, onDelete, notify, setModal }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [deletingId, setDeletingId] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 10;
 
     const filteredProjects = projects.filter((project) =>
         project.title?.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    // Pagination Calculation
+    const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
+    const paginatedProjects = filteredProjects.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE, 
+        currentPage * ITEMS_PER_PAGE
+    );
+
+    // Reset page on search
+    const handleSearch = (e) => {
+        setSearchQuery(e.target.value);
+        setCurrentPage(1);
+    };
 
     const deleteHistory = () => {
         setModal({
@@ -66,23 +81,28 @@ export default function VaultArchive({ projects, onRestore, fetchHistory, onDele
                         type="text"
                         placeholder="Search mission title..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={handleSearch}
                         className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-100 focus:border-slate-300 outline-none transition-all text-[13px]"
                     />
                 </div>
 
-                <button 
-                    onClick={deleteHistory}
-                    className="flex items-center gap-1.5 text-slate-400 hover:text-black transition-colors text-[10px] font-semibold uppercase tracking-wider px-2"
-                >
-                    <Trash2 size={12} /> Clear History
-                </button>
+                <div className="flex items-center gap-4">
+                    <div className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-md">
+                        Total Records: <span className="text-black ml-1">{projects.length}</span>
+                    </div>
+                    <button 
+                        onClick={deleteHistory}
+                        className="flex items-center gap-1.5 text-slate-400 hover:text-black transition-colors text-[10px] font-semibold uppercase tracking-wider px-2"
+                    >
+                        <Trash2 size={12} /> Clear History
+                    </button>
+                </div>
             </div>
 
             {/* PROJECT GRID */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredProjects.length > 0 ? (
-                    filteredProjects.map((project) => (
+                {paginatedProjects.length > 0 ? (
+                    paginatedProjects.map((project) => (
                         <div 
                             key={project._id}
                             className="bg-white border border-slate-100 rounded-xl p-5 hover:border-slate-300 transition-all group relative"
@@ -145,6 +165,29 @@ export default function VaultArchive({ projects, onRestore, fetchHistory, onDele
                     </div>
                 )}
             </div>
+
+            {/* PAGINATION CONTROLS */}
+            {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-3">
+                    <button 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-md disabled:opacity-50 hover:bg-slate-50 transition-all text-slate-700"
+                    >
+                        Previous
+                    </button>
+                    <span className="text-[11px] font-medium text-slate-500">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <button 
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-md disabled:opacity-50 hover:bg-slate-50 transition-all text-slate-700"
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

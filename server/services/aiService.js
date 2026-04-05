@@ -46,36 +46,80 @@ const PLATFORMS_CONFIG = [
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const MAX_INPUT_CHARS = 3500;
+// Increased to 6000 heavily retain original text
+const MAX_INPUT_CHARS = 6000;
 
-async function summarizeIfNeeded(text) {
+async function summarizeIfNeeded(text, userGroqKey = "") {
     if (!text || typeof text !== 'string') return text;
     text = text.replace(/\s+/g, ' ').trim();
     if (text.length <= MAX_INPUT_CHARS) return text;
 
-    console.log(`📝 Text too long (${text.length} chars). Pre-summarizing...`);
+    console.log(`📝 Text too long (${text.length} chars). Employing Map-Reduce Chunk Summarization...`);
+    const client = userGroqKey ? new Groq({ apiKey: userGroqKey }) : groqContent;
+    
     try {
-        const response = await groqContent.chat.completions.create({
+        // Groq handles ~8k tokens (roughly 30,000 characters) per request safely.
+        // We chunk the text into 20k character segments to ensure it never crashes.
+        const chunkSize = 20000;
+        let chunks = [];
+        for (let i = 0; i < text.length; i += chunkSize) {
+            chunks.push(text.substring(i, i + chunkSize));
+        }
+
+        console.log(`🧩 Splitting text into ${chunks.length} chunks for parallel analysis...`);
+        
+        const chunkPromises = chunks.map(async (chunk) => {
+            // Distribute load across available API keys to prevent throttling 
+            const requestClient = userGroqKey ? client : nextGroqClient();
+            const response = await requestClient.chat.completions.create({
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are an expert content distiller. Extract all primary arguments, data points, and critical context from this segment. Do NOT drop important information. Return ONLY a highly detailed synthesis. No introductory meta-chatter."
+                    },
+                    { role: "user", content: chunk }
+                ],
+                model: "llama-3.1-8b-instant",
+                max_tokens: 1000, 
+            });
+            return response.choices[0].message.content.trim();
+        });
+
+        const aggregatedSummaries = await Promise.all(chunkPromises);
+
+        const combinedText = aggregatedSummaries.join('\\n\\n');
+
+        // If the combined summary is now nicely compact, return it! 
+        // If it's STILL massively huge, we do one final master-summarization sweep.
+        if (combinedText.length <= MAX_INPUT_CHARS * 1.5) {
+            console.log(`✅ Chunking complete. Final text length: ${combinedText.length} chars.`);
+            return combinedText;
+        }
+
+        console.log(`📝 Combined chunks still large (${combinedText.length} chars). Applying Final Polish Master-Summary...`);
+        const finalResponse = await client.chat.completions.create({
             messages: [
                 {
                     role: "system",
-                    content: "You are a highly capable AI summarizer. Summarize the following content in 300-400 words, preserving ALL key facts, quotes, context, and the core message. Ignore any random PDF artifacts or broken text. Return ONLY the summary, no preamble."
+                    content: "Synthesize this master document. Retain ALL core themes, quotes, and primary facts. Keep the length detailed but under 2,500 words. Format clearly."
                 },
-                { role: "user", content: text.substring(0, 20000) }
+                { role: "user", content: combinedText.substring(0, 25000) }
             ],
             model: "llama-3.1-8b-instant",
-            max_tokens: 600,
+            max_tokens: 1500,
         });
-        const summary = response.choices[0].message.content.trim();
-        console.log(`✅ Summarized down to ${summary.length} chars.`);
-        return summary;
+
+        const finalSummary = finalResponse.choices[0].message.content.trim();
+        console.log(`✅ Final Master Summary completed down to ${finalSummary.length} chars.`);
+        return finalSummary;
+        
     } catch (err) {
-        console.warn(`⚠️ Summarization failed, falling back to truncation:`, err.message);
+        console.warn(`⚠️ Summarization map-reduce failed, falling back to safe truncation:`, err.message);
         return text.substring(0, MAX_INPUT_CHARS);
     }
 }
 
-async function generatePlatformText(platformId, text, tone, useHashtags = false, brandVoice = "") {
+async function generatePlatformText(platformId, text, tone, useHashtags = false, brandVoice = "", userGroqKey = "") {
     const config = PLATFORMS_CONFIG.find(p => p.id === platformId);
     if (!config) throw new Error(`Unknown platform: ${platformId}`);
 
@@ -95,15 +139,20 @@ async function generatePlatformText(platformId, text, tone, useHashtags = false,
     }
 
     // Check if all keys are dummy/missing — return mock if so
-    const primaryKey = process.env.GROQ_API_KEY_CONTENT || process.env.GROQ_API_KEY;
-    if (primaryKey && primaryKey.includes('dummy') && contentKeyPool.length === 0) {
+    const primaryKey = userGroqKey || process.env.GROQ_API_KEY_CONTENT || process.env.GROQ_API_KEY;
+    if (primaryKey && primaryKey.includes('dummy') && contentKeyPool.length === 0 && !userGroqKey) {
         await sleep(500);
         return `[MOCKED ${platformId.toUpperCase()}] Dummy post for ${platformId} (${tone}): "${text.substring(0, 30)}..."${useHashtags ? '\n\n#mockdata #test' : ''}`;
     }
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        // Pick the next key in the round-robin pool for each attempt
-        const client = nextGroqClient();
+        // Use user key if provided, otherwise rotate existing pool
+        let client;
+        if (userGroqKey) {
+            client = new Groq({ apiKey: userGroqKey });
+        } else {
+            client = nextGroqClient();
+        }
         try {
             const completion = await client.chat.completions.create({
                 messages: [

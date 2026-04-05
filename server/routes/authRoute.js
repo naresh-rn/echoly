@@ -9,5 +9,6 @@ router.get('/me', auth, authController.getMe);
 router.delete('/delete-account', auth, authController.deleteAccount);
 router.put('/brand-voice', auth, authController.updateBrandVoice);
 router.put('/update-password', auth, authController.updatePassword);
+router.put('/api-keys', auth, authController.updateApiKeys);
 
 module.exports = router;

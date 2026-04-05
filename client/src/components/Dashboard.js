@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import axios from 'axios';
 import { 
-  Zap, Archive, LogOut, Layout, Settings, Download, Menu, ChevronRight, Activity, ShieldCheck, Image as ImageIcon, X 
+  Zap, Archive, Settings, Download, Menu, ChevronRight, Activity, ShieldCheck, X, FileText
 } from 'lucide-react';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 // Child Components
 import EngineWorkspace from './Engine/EngineWorkspace';
@@ -17,6 +19,59 @@ import AdminDashboard from './Admin/AdminDashboard';
 // UI Components
 import Modal from './UI/Modal';
 import Notification from './UI/Notification';
+
+function WorkspaceContent({ onRepurpose, isGenerating, progress, statusText, onCancel, setNotification, generatedImage, bundle, currentProjectId, handleSingleRegenerate, handleGenerateImage, handleDeleteAsset, handleUpdateAsset, setModal }) {
+    const hasAssets = Object.keys(bundle || {}).length > 0;
+    const isRestoredView = hasAssets && !isGenerating;
+
+    return (
+      <div className="space-y-8">
+        {!isRestoredView && (
+          <EngineWorkspace 
+            onRepurpose={onRepurpose} 
+            isGenerating={isGenerating} 
+            progress={progress} 
+            statusText={statusText} 
+            onCancel={onCancel}
+            notify={setNotification}
+          />
+        )}
+      
+      {generatedImage && (
+        <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
+          <img src={generatedImage} alt="AI Visual" className="w-full h-auto" />
+          <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-left w-full sm:w-auto">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Visual Asset</span>
+              <span className="text-sm font-semibold">AI Generated Render</span>
+            </div>
+            <a href={generatedImage} download="Echoly_Visual.png" className="w-full sm:w-auto text-center bg-black text-white px-6 py-2 rounded-lg font-bold text-[10px] uppercase">Download Image</a>
+          </div>
+        </div>
+      )}
+
+      {(Object.keys(bundle || {}).length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {Object.entries(bundle || {}).map(([p, c]) => (
+            <ResultCard 
+              key={p} 
+              platform={p} 
+              content={c} 
+              projectId={currentProjectId}
+              isGenerating={isGenerating} 
+              onRegenerate={() => handleSingleRegenerate(p)} 
+              onGenerateImage={() => handleGenerateImage(c)} 
+              onDelete={() => handleDeleteAsset(p)}
+              onUpdate={handleUpdateAsset}
+              setNotification={setNotification}
+              setModal={setModal}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Dashboard({ user, setUser }) {
   const navigate = useNavigate();
@@ -59,8 +114,53 @@ export default function Dashboard({ user, setUser }) {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  const handleRestoreInternal = useCallback((project) => {
+      const restoredBundle = {};
+      if (project.assets) {
+          project.assets.forEach(asset => { 
+              restoredBundle[asset.platform.toLowerCase()] = asset.content; 
+          });
+      }
+      setCurrentProjectId(project._id);
+      setCurrentTitle(project.title || "");
+      setBundle(restoredBundle);
+      setRawText(project.source?.rawTranscript || ""); 
+  }, []);
+
+  const [lastFetchedId, setLastFetchedId] = useState(null);
+  
+  // URL Based Project Loading
+  useEffect(() => {
+      const match = location.pathname.match(/\/dashboard\/project\/([a-zA-Z0-9]+)/);
+      if (match && match[1]) {
+          const pId = match[1];
+          if (pId !== currentProjectId && pId !== lastFetchedId) {
+             setLastFetchedId(pId);
+             const found = history.find(h => h._id === pId);
+             if (found) {
+                handleRestoreInternal(found);
+             } else {
+                // Fetch from backend
+                const fetchProject = async () => {
+                   try {
+                       const token = localStorage.getItem('token');
+                       const res = await axios.get(`${API_BASE}/projects/${pId}`, { headers: { 'x-auth-token': token } });
+                       handleRestoreInternal(res.data);
+                   } catch (e) {
+                       setNotification({ message: "Project not found or access denied.", type: 'error' });
+                       navigate('/dashboard');
+                   }
+                };
+                fetchProject();
+             }
+          }
+      }
+  }, [location.pathname, currentProjectId, history, API_BASE, handleRestoreInternal, navigate, lastFetchedId]);
+
   // --- 2. ENGINE LOGIC ---
-  const handleRepurpose = async (type, content, tone, includeHashtags, title) => {
+  const handleRepurpose = async (type, content, tone, includeHashtags, title, includeImage) => {
       setIsGenerating(true);
       setCurrentTitle(title);
       setBundle({});
@@ -149,10 +249,18 @@ export default function Dashboard({ user, setUser }) {
           setTimeout(async () => {
               setIsGenerating(false);
               if (!wasCancelled) {
-                  fetchHistory();
+                  const updatedHistory = await fetchHistory();
                   
-                  // Automatically trigger image generation if we have a title
-                  if (title && title.trim()) {
+                  // Optimistic URL update so backend fetch passes projectId
+                  if (updatedHistory && updatedHistory.length > 0) {
+                      const newProj = updatedHistory[0]; // mostly will be the newly created project
+                      if (history.length === 0 || newProj._id !== history[0]?._id) {
+                         navigate(`/dashboard/project/${newProj._id}`, { replace: true });
+                      }
+                  }
+
+                  // Automatically trigger image generation if requested
+                  if (includeImage && title && title.trim()) {
                       handleGenerateImage(title);
                   }
               } else {
@@ -231,32 +339,14 @@ export default function Dashboard({ user, setUser }) {
 
 // --- Updated handleRestore in Dashboard.js ---
 const handleRestore = (project) => {
-    const restoredBundle = {};
-    if (project.assets) {
-        project.assets.forEach(asset => { 
-            restoredBundle[asset.platform.toLowerCase()] = asset.content; 
-        });
-    }
-    
-    // Set the current project ID so 'repurpose-single' knows what project we are on
-    setCurrentProjectId(project._id);
-    setCurrentTitle(project.title || "");
-    
-    // Set the bundle to show the cards
-    setBundle(restoredBundle);
-    
-    // Crucial: Set the raw text so we can use it for AI context later
-    setRawText(project.source?.rawTranscript || ""); 
-    
-    navigate('/dashboard'); 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate(`/dashboard/project/${project._id}`);
 };
 
   const handleDownloadMarkdown = () => {
     if (!bundle) return;
     let fileContent = `# Echoly Generation Report\n**Date:** ${new Date().toLocaleString()}\n\n`;
     Object.entries(bundle).forEach(([platform, content]) => { 
-        fileContent += `## ${platform.toUpperCase()}\n\n${content}\n\n---\n\n`; 
+        fileContent += `## ${platform.toUpperCase()}\n\n${content.replace(/<[^>]+>/g, '')}\n\n---\n\n`; 
     });
     const blob = new Blob([fileContent], { type: 'text/markdown' });
     const link = document.createElement('a');
@@ -267,19 +357,35 @@ const handleRestore = (project) => {
     document.body.removeChild(link);
   };
 
-  const handleCopyAll = async () => {
+  const handleDownloadZip = async () => {
     if (!bundle) return;
-    let allContent = "";
-    Object.entries(bundle).forEach(([platform, content]) => {
-      allContent += `[${platform.toUpperCase()}]\n${content}\n\n`;
+    const zip = new JSZip();
+    
+    // 1. Markdown file
+    let fileContent = `# Echoly Generation Report\n**Date:** ${new Date().toLocaleString()}\n\n`;
+    Object.entries(bundle).forEach(([platform, content]) => { 
+        fileContent += `## ${platform.toUpperCase()}\n\n${content.replace(/<[^>]+>/g, '')}\n\n---\n\n`; 
     });
-    try {
-      await navigator.clipboard.writeText(allContent);
-      setNotification({ message: "All content copied to clipboard!", type: 'success' });
-    } catch (err) {
-      setNotification({ message: "Failed to copy content.", type: 'error' });
+    zip.file("Echoly_Assets.md", fileContent);
+
+    // 2. Transcript
+    if (rawText) {
+      zip.file("Raw_Transcript.txt", rawText);
     }
+
+    // 3. Image
+    if (generatedImage) {
+      const base64Data = generatedImage.split(',')[1];
+      if (base64Data) {
+         zip.file("Echoly_Visual.png", base64Data, {base64: true});
+      }
+    }
+
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    saveAs(zipBlob, "Echoly_Bundle.zip");
   };
+
+
 
   const handleGenerateImage = async (content) => {
     // Priority: 1. Project Title, 2. Provided Content
@@ -317,6 +423,16 @@ const handleRestore = (project) => {
     if (abortControllerRef.current) {
         abortControllerRef.current.abort();
     }
+  };
+
+  const handleNewProject = () => {
+      setCurrentProjectId(null);
+      setBundle({});
+      setRawText("");
+      setCurrentTitle("");
+      setGeneratedImage(null);
+      navigate('/dashboard');
+      setIsMobileMenuOpen(false);
   };
 
   // Sidebar Helper
@@ -363,11 +479,49 @@ const handleRestore = (project) => {
           </button>
         </div>
 
-        <nav className="flex-grow px-3 mt-4">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-4">Core</div>
-          <SidebarItem to="/dashboard" icon={Layout} label="Workspace" />
-          <SidebarItem to="/dashboard/vault" icon={Archive} label="Asset History" />
+        <nav className="flex-grow px-3 mt-4 overflow-y-auto pb-4">
+          <div className="mb-6 px-1">
+              <button 
+                onClick={handleNewProject} 
+                className="w-full flex items-center justify-center gap-2 bg-black text-white hover:bg-slate-800 transition-colors px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm"
+              >
+                 <Zap size={14} fill="currentColor" /> New Project
+              </button>
+          </div>
+
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-3 mt-2">Library</div>
+          <SidebarItem to="/dashboard/vault" icon={Archive} label="Asset Vault" />
           
+          {history && history.length > 0 && (
+            <>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6">Recent Projects</div>
+              {history.slice(0, 5).map(proj => {
+                 const isActive = location.pathname === `/dashboard/project/${proj._id}`;
+                 return (
+                 <Link 
+                   key={proj._id}
+                   to={`/dashboard/project/${proj._id}`}
+                   onClick={() => setIsMobileMenuOpen(false)}
+                   className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all mb-1 group ${
+                     isActive
+                       ? 'bg-slate-100 text-black shadow-sm' 
+                       : 'text-slate-500 hover:text-black hover:bg-slate-50'
+                   }`}
+                 >
+                    {isActive ? (
+                       <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
+                    ) : (
+                       <div className="w-1.5 h-1.5 rounded-full border border-slate-300 shrink-0 group-hover:border-slate-400 transition-colors"></div>
+                    )}
+                    <span className={`text-[12px] truncate w-full leading-5 block ${isActive ? 'font-semibold' : 'font-medium'}`} title={proj.title || 'Untitled Session'}>
+                       {proj.title || 'Untitled Session'}
+                    </span>
+                 </Link>
+                 );
+              })}
+            </>
+          )}
+
           {user?.isAdmin && (
             <SidebarItem to="/dashboard/admin" icon={ShieldCheck} label="Admin Panel" />
           )}
@@ -416,13 +570,13 @@ const handleRestore = (project) => {
                 </h1>
               </div>
 
-              {bundle && Object.keys(bundle).length > 0 && !isGenerating && location.pathname === "/dashboard" && (
+              {bundle && Object.keys(bundle).length > 0 && !isGenerating && (location.pathname === "/dashboard" || location.pathname.includes("/project/")) && (
                 <div className="flex gap-2">
-                  <button onClick={handleCopyAll} className="flex items-center justify-center gap-2 bg-slate-100 text-slate-900 px-5 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-200 transition-all shadow-sm">
-                    <Activity size={14} /> Copy All
+                  <button onClick={handleDownloadMarkdown} className="flex items-center justify-center gap-2 bg-slate-100 text-slate-900 px-5 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-200 transition-all shadow-sm border border-slate-200">
+                    <FileText size={14} /> DL .md
                   </button>
-                  <button onClick={handleDownloadMarkdown} className="flex items-center justify-center gap-2 bg-black text-white px-5 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-800 transition-all shadow-sm">
-                    <Download size={14} /> Download .md
+                  <button onClick={handleDownloadZip} className="flex items-center justify-center gap-2 bg-black text-white px-5 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider hover:bg-slate-800 transition-all shadow-sm">
+                    <Download size={14} /> Full .zip Array
                   </button>
                 </div>
               )}
@@ -431,49 +585,22 @@ const handleRestore = (project) => {
             <div className="pb-10">
               <Routes>
                 <Route path="/" element={
-                  <div className="space-y-8">
-                    <EngineWorkspace 
-                      onRepurpose={handleRepurpose} 
-                      isGenerating={isGenerating} 
-                      progress={progress} 
-                      statusText={statusText} 
-                      onCancel={handleCancelGeneration}
-                      notify={setNotification}
-                    />
-                    
-                    {generatedImage && (
-                      <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
-                        <img src={generatedImage} alt="AI Visual" className="w-full h-auto" />
-                        <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-                          <div className="text-left w-full sm:w-auto">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Visual Asset</span>
-                            <span className="text-sm font-semibold">AI Generated Render</span>
-                          </div>
-                          <a href={generatedImage} download="Echoly_Visual.png" className="w-full sm:w-auto text-center bg-black text-white px-6 py-2 rounded-lg font-bold text-[10px] uppercase">Download Image</a>
-                        </div>
-                      </div>
-                    )}
-
-                    {(Object.keys(bundle || {}).length > 0) && (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {Object.entries(bundle || {}).map(([p, c]) => (
-                          <ResultCard 
-                            key={p} 
-                            platform={p} 
-                            content={c} 
-                            projectId={currentProjectId}
-                            isGenerating={isGenerating} 
-                            onRegenerate={() => handleSingleRegenerate(p)} 
-                            onGenerateImage={() => handleGenerateImage(c)} 
-                            onDelete={() => handleDeleteAsset(p)}
-                            onUpdate={handleUpdateAsset}
-                            setNotification={setNotification}
-                            setModal={setModal}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <WorkspaceContent 
+                      onRepurpose={handleRepurpose} isGenerating={isGenerating} progress={progress} 
+                      statusText={statusText} onCancel={handleCancelGeneration} setNotification={setNotification}
+                      generatedImage={generatedImage} bundle={bundle} currentProjectId={currentProjectId}
+                      handleSingleRegenerate={handleSingleRegenerate} handleGenerateImage={handleGenerateImage}
+                      handleDeleteAsset={handleDeleteAsset} handleUpdateAsset={handleUpdateAsset} setModal={setModal}
+                  />
+                } />
+                <Route path="/project/:projectId" element={
+                  <WorkspaceContent 
+                      onRepurpose={handleRepurpose} isGenerating={isGenerating} progress={progress} 
+                      statusText={statusText} onCancel={handleCancelGeneration} setNotification={setNotification}
+                      generatedImage={generatedImage} bundle={bundle} currentProjectId={currentProjectId}
+                      handleSingleRegenerate={handleSingleRegenerate} handleGenerateImage={handleGenerateImage}
+                      handleDeleteAsset={handleDeleteAsset} handleUpdateAsset={handleUpdateAsset} setModal={setModal}
+                  />
                 } />
                 <Route path="/vault" element={<VaultArchive projects={history} onRestore={handleRestore} fetchHistory={fetchHistory} onDelete={async (id) => { await axios.delete(`${API_BASE}/projects/${id}`, { headers: { 'x-auth-token': localStorage.getItem('token') } }); fetchHistory(); }} notify={setNotification} setModal={setModal} />} />
                 <Route path="/settings" element={<SettingsPage user={user} setUser={setUser} />} />

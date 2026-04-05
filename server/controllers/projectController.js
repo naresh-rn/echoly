@@ -10,6 +10,16 @@ const getHistory = async (req, res) => {
     }
 };
 
+const getProjectById = async (req, res) => {
+    try {
+        const project = await Project.findOne({ _id: req.params.projectId, userId: req.user.id });
+        if (!project) return res.status(404).json({ error: "Project not found" });
+        res.json(project);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+};
+
 const updateAsset = async (req, res) => {
     try {
         const { projectId } = req.params;
@@ -71,6 +81,7 @@ const deleteAllHistory = async (req, res) => {
 
 module.exports = {
     getHistory,
+    getProjectById,
     updateAsset,
     deleteProject,
     deleteAsset,

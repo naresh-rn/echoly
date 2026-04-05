@@ -98,6 +98,21 @@ const updateBrandVoice = async (req, res) => {
     }
 };
 
+const updateApiKeys = async (req, res) => {
+    try {
+        const { apiKeys } = req.body;
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: { apiKeys } },
+            { new: true }
+        ).select('-password');
+        
+        res.json({ success: true, apiKeys: user.apiKeys });
+    } catch (err) {
+        res.status(500).json({ msg: 'Failed to update API Keys' });
+    }
+};
+
 const updatePassword = async (req, res) => {
     const { oldPassword, newPassword } = req.body;
     try {
@@ -117,4 +132,4 @@ const updatePassword = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser, getMe, deleteAccount, updateBrandVoice, updatePassword };
+module.exports = { registerUser, loginUser, getMe, deleteAccount, updateBrandVoice, updatePassword, updateApiKeys };

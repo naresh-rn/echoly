@@ -318,9 +318,22 @@ async function uploadToCloudinary(filePath) {
 
 // ─── PDF parser ───────────────────────────────────────────────────────────────
 async function parsePdf(filePath) {
-    const data = await pdf(fs.readFileSync(filePath));
+    let rawText = "";
+
+    if (pdf.PDFParse) {
+        // Handle new pdf-parse 2.x
+        const parser = new pdf.PDFParse({ data: fs.readFileSync(filePath) });
+        const result = await parser.getText();
+        rawText = result.text;
+    } else {
+        // Handle standard pdf-parse 1.x
+        const parseFunction = typeof pdf === "function" ? pdf : pdf.default;
+        const result = await parseFunction(fs.readFileSync(filePath));
+        rawText = result.text;
+    }
+
     // Optimize text output: strip excess line breaks and spaces to save tokens
-    const optimizedText = data.text.replace(/\s+/g, ' ').trim();
+    const optimizedText = rawText.replace(/\s+/g, ' ').trim();
     return { text: optimizedText };
 }
 

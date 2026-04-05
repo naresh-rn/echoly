@@ -75,7 +75,7 @@ const connectDB = async () => {
         console.error(`Reason: ${err.message}`);
         // Log more details if it's a timeout
         if (err.name === 'MongooseServerSelectionError') {
-            console.error('Tip: Check if your Railway database is active and accepting connections from your current IP.');
+            console.error('Tip: Check if your MongoDB Atlas cluster is active and your current IP is whitelisted.');
         }
     }
 };

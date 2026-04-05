@@ -7,6 +7,9 @@ const UserSchema = new mongoose.Schema({
     password: { type: String, required: true },
     isAdmin: { type: Boolean, default: false },
     brandVoice: { type: String, default: "" },
+    apiKeys: {
+        groq: { type: String, default: "" }
+    },
     createdAt: { type: Date, default: Date.now }
 });
 

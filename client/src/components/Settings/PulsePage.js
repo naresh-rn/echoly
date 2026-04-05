@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Cpu, Zap, Globe, HardDrive, ShieldCheck, BarChart3, Radio } from 'lucide-react';
+import { Activity, Zap, HardDrive, BarChart3, Radio } from 'lucide-react';
 
 const MetricCard = ({ title, value, sub, icon: Icon, color }) => (
   <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-all">

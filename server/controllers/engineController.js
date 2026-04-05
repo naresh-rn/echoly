@@ -15,6 +15,7 @@ const repurposeAll = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         const brandVoice = user?.brandVoice || "";
+        const userGroqKey = user?.apiKeys?.groq || "";
 
         let isCancelled = false;
         req.on('close', () => {
@@ -100,7 +101,7 @@ const repurposeAll = async (req, res) => {
             console.warn('⚠️ textToProcess was empty — using placeholder to allow generation to proceed.');
         }
 
-        textToProcess = await summarizeIfNeeded(textToProcess);
+        textToProcess = await summarizeIfNeeded(textToProcess, userGroqKey);
 
         sendUpdate({ status: "Content Secured. Beginning AI Synthesis...", progress: 20 });
 
@@ -116,7 +117,7 @@ const repurposeAll = async (req, res) => {
             const currentProgress = 20 + Math.round(((i + 1) / PLATFORMS_CONFIG.length) * 75);
 
             try {
-                const aiResult = await generatePlatformText(p.id, textToProcess, tone, useHashtags, brandVoice);
+                const aiResult = await generatePlatformText(p.id, textToProcess, tone, useHashtags, brandVoice, userGroqKey);
 
                 sendUpdate({
                     status: `Generated ${p.id.toUpperCase()} Asset`,
@@ -127,7 +128,7 @@ const repurposeAll = async (req, res) => {
                 assetList.push({ platform: p.id.toUpperCase(), content: aiResult, generatedAt: new Date() });
                 bundle[p.id.toLowerCase()] = aiResult;
 
-                await sleep(1800);
+                await sleep(500);
             } catch (genErr) {
                 console.error(`Error generating for ${p.id}:`, genErr.message);
             }
@@ -188,13 +189,15 @@ const repurposeSingle = async (req, res) => {
 
         const user = await User.findById(req.user.id);
         const brandVoice = user?.brandVoice || "";
+        const userGroqKey = user?.apiKeys?.groq || "";
 
         const newContent = await generatePlatformText(
             platformId.toLowerCase(), 
             project.source.rawTranscript, 
             tone || 'PROFESSIONAL',
             useHashtags,
-            brandVoice
+            brandVoice,
+            userGroqKey
         );
 
         await Project.findOneAndUpdate(

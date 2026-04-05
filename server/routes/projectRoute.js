@@ -5,6 +5,7 @@ const { auth } = require('../middleware/auth');
 
 router.get('/history', auth, projectController.getHistory);
 router.delete('/history', auth, projectController.deleteAllHistory);
+router.get('/projects/:projectId', auth, projectController.getProjectById);
 
 router.put('/projects/:projectId/asset', auth, projectController.updateAsset);
 router.delete('/projects/:id', auth, projectController.deleteProject);

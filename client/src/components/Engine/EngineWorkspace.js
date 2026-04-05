@@ -18,6 +18,7 @@ export default function EngineWorkspace({ onRepurpose, isGenerating, progress, s
   const [selectedFile, setSelectedFile] = useState(null);
   const [tone, setTone] = useState('Professional');
   const [includeHashtags, setIncludeHashtags] = useState(false);
+  const [includeImage, setIncludeImage] = useState(false);
   const [title, setTitle] = useState('');
   
   const fileInputRef = useRef(null);
@@ -73,7 +74,7 @@ const handleInitialize = () => {
     }
 
     // If all pass, start the engine (always send trimmed content for URL types)
-    onRepurpose(type, type === 'file' ? selectedFile : trimmedContent, tone, includeHashtags, title);
+    onRepurpose(type, type === 'file' ? selectedFile : trimmedContent, tone, includeHashtags, title, includeImage);
 };
 
   const isInputReady = type === 'file' ? !!selectedFile : content.trim().length > 0;
@@ -136,16 +137,30 @@ const handleInitialize = () => {
             </div>
           </div>
 
-          {/* HASHTAG TOGGLE */}
-          <div className="pt-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={includeHashtags} 
-                onChange={(e) => setIncludeHashtags(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 transition-all"
-              />
-              <span className="text-xs font-medium text-slate-600">Include generated hashtags</span>
+          {/* HASHTAG & VISUAL TOGGLES */}
+          <div className="pt-2 space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <div className="relative flex items-center">
+                <input 
+                  type="checkbox" 
+                  checked={includeHashtags} 
+                  onChange={(e) => setIncludeHashtags(e.target.checked)}
+                  className="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-800 transition-all cursor-pointer accent-black"
+                />
+              </div>
+              <span className="text-xs font-medium text-slate-600 group-hover:text-slate-900 transition-colors">Include generated hashtags</span>
+            </label>
+            
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <div className="relative flex items-center">
+                <input 
+                  type="checkbox" 
+                  checked={includeImage} 
+                  onChange={(e) => setIncludeImage(e.target.checked)}
+                  className="w-4 h-4 text-slate-800 rounded border-slate-300 focus:ring-slate-800 transition-all cursor-pointer accent-black"
+                />
+              </div>
+              <span className="text-xs font-medium text-slate-600 group-hover:text-slate-900 transition-colors">Include AI Visual Content</span>
             </label>
           </div>
         </div>

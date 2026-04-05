@@ -8,8 +8,10 @@ import {
   Trash2,
   Edit3,
   Save,
-  FileText
+  Send
 } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 export default function ResultCard({ 
   platform, 
@@ -47,7 +49,7 @@ export default function ResultCard({
       try {
         await navigator.share({
           title: `Echoly - ${platform} Asset`,
-          text: localContent,
+          text: localContent.replace(/<[^>]+>/g, ''), // strip HTML for native share
         });
       } catch (err) {
         console.log('Share canceled');
@@ -56,6 +58,22 @@ export default function ResultCard({
       handleCopy(); 
       setNotification({ message: "Content copied (Share and supported on this device).", type: 'info' });
     }
+  };
+
+  const handlePublish = () => {
+      const text = localContent.replace(/<[^>]+>/g, '');
+      const enc = encodeURIComponent(text);
+      let url = "";
+
+      switch (platform.toLowerCase()) {
+        case 'twitter': url = `https://twitter.com/intent/tweet?text=${enc}`; break;
+        case 'linkedin': url = `https://www.linkedin.com/feed/`; break;
+        case 'facebook': url = `https://www.facebook.com/`; break;
+        case 'reddit': url = `https://www.reddit.com/submit?title=New Post&text=${enc}`; break;
+        default: url = `https://${platform.toLowerCase()}.com`; break;
+      }
+
+      window.open(url, '_blank');
   };
 
   const handleDelete = () => {
@@ -142,35 +160,50 @@ export default function ResultCard({
 
       {/* 
         2. CONTENT BODY 
-        Minimal padding, cleaner look
+        Rich text editing interface
       */}
-      <div className={`flex-1 mb-3 relative rounded-xl border transition-colors duration-200 ${isEditing ? 'bg-white border-blue-200 ring-2 ring-blue-50' : 'bg-gray-50/50 border-transparent'}`}>
-        <textarea 
-          className={`w-full h-full min-h-[140px] text-xs leading-6 text-slate-600 bg-transparent resize-none outline-none font-medium p-3 scrollbar-hide ${isEditing ? 'text-slate-900' : ''}`}
-          value={localContent}
-          onChange={(e) => setLocalContent(e.target.value)}
-          readOnly={!isEditing}
-          spellCheck={isEditing}
-        />
+      <div className={`flex-1 mb-3 relative rounded-xl border transition-colors duration-200 ${isEditing ? 'bg-white border-blue-200 ring-2 ring-blue-50' : 'bg-gray-50/50 border-transparent'} overflow-hidden`}>
+        {isEditing ? (
+          <ReactQuill 
+            theme="snow"
+            value={localContent}
+            onChange={setLocalContent}
+            className="h-full min-h-[150px] custom-quill-editor"
+            modules={{ toolbar: [['bold', 'italic', 'underline'], [{'list': 'ordered'}, {'list': 'bullet'}]] }}
+          />
+        ) : (
+          <div 
+             className="w-full h-full min-h-[150px] text-xs leading-6 text-slate-900 bg-transparent outline-none p-3 overflow-y-auto max-h-[300px] scrollbar-hide richtext-preview"
+             dangerouslySetInnerHTML={{ __html: localContent || '' }}
+          />
+        )}
       </div>
 
       {/* 
         3. BOTTOM ACTIONS 
-        Copy & Share side-by-side
       */}
       <div className="flex gap-2">
-        {/* Copy Button (Primary) */}
+        {/* Copy Button */}
         <button 
           onClick={handleCopy}
           className={`
             flex-1 py-2.5 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all duration-200 flex items-center justify-center gap-2 border
             ${copied 
               ? 'bg-emerald-50 border-emerald-100 text-emerald-600' 
-              : 'bg-slate-900 border-slate-900 text-white hover:bg-slate-800 hover:border-slate-800 active:scale-[0.98]'}
+              : 'bg-white border-gray-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]'}
           `}
         >
           {copied ? <Check size={14} strokeWidth={3} /> : <Copy size={14} />}
           {copied ? 'Copied' : 'Copy'}
+        </button>
+
+        {/* Publish Button */}
+        <button 
+          onClick={handlePublish}
+          className="flex-1 bg-black text-white py-2.5 rounded-lg border border-black font-bold text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          title="Publish Directly"
+        >
+          <Send size={14} /> Publish
         </button>
 
         {/* Share Button (Secondary) */}
